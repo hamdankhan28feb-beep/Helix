@@ -54,7 +54,7 @@ export const RegionDrawer: React.FC<RegionDrawerProps> = ({
   onMeasureIndicator,
 }) => {
   const [showDetails, setShowDetails] = useState(experience === 'experienced');
-  const [chartMode, setChartMode] = useState<'baseline' | 'reference'>('baseline');
+  const chartMode = 'baseline' as const;
   const [openFiveQ, setOpenFiveQ] = useState<string | null>(null);
 
   useEffect(() => {
@@ -162,32 +162,7 @@ export const RegionDrawer: React.FC<RegionDrawerProps> = ({
             <h3 className="text-sm font-semibold text-[#E8EEF7]">
               Linked indicators ({regionIndicators.length})
             </h3>
-            <div className="inline-flex items-center p-0.5 rounded-lg bg-[#070B14] border border-white/10 text-[11px]">
-              <button
-                type="button"
-                onClick={() => setChartMode('baseline')}
-                className={cn(
-                  'px-2 py-1 rounded-md cursor-pointer',
-                  chartMode === 'baseline'
-                    ? 'bg-[#151E2E] text-[#E8EEF7]'
-                    : 'text-[#8A97AD]'
-                )}
-              >
-                My baseline
-              </button>
-              <button
-                type="button"
-                onClick={() => setChartMode('reference')}
-                className={cn(
-                  'px-2 py-1 rounded-md cursor-pointer',
-                  chartMode === 'reference'
-                    ? 'bg-[#151E2E] text-[#E8EEF7]'
-                    : 'text-[#8A97AD]'
-                )}
-              >
-                Reference range
-              </button>
-            </div>
+            <span className="text-[10px] text-[#8A97AD]">Personal baseline trend</span>
           </div>
 
           <div className="space-y-4">
@@ -267,7 +242,7 @@ export const RegionDrawer: React.FC<RegionDrawerProps> = ({
                   />
 
                   <p className="text-[11px] text-[#8A97AD]">
-                    Reference source: {ind.referenceSource} ({ind.referenceRange.label})
+                    No clinical range is configured. Follow your mission medical protocol.
                   </p>
 
                   {/* Five Questions Expandable Panel */}

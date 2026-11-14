@@ -28,6 +28,228 @@ const STORAGE_KEYS = {
   accessibility: 'helix_a11y_v1',
 };
 
+const DB_NAME = 'helix-local-v1';
+const DB_VERSION = 1;
+type SyncItem = { id: string; kind: 'measurement' | 'packet'; payload: unknown; createdAt: string };
+
+function openLocalDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('state')) db.createObjectStore('state');
+      if (!db.objectStoreNames.contains('syncQueue')) db.createObjectStore('syncQueue', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('offlineAuth')) db.createObjectStore('offlineAuth');
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function idbWrite(store: string, key: IDBValidKey, value: unknown): Promise<void> {
+  try {
+    const db = await openLocalDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(store, 'readwrite');
+      tx.objectStore(store).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch { /* LocalStorage remains a graceful fallback on restricted browsers. */ }
+}
+
+async function queueSync(item: SyncItem): Promise<void> {
+  try {
+    const db = await openLocalDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('syncQueue', 'readwrite');
+      tx.objectStore('syncQueue').put(item);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch { /* Keep essential work local even if IndexedDB is unavailable. */ }
+}
+
+async function readSyncQueue(): Promise<SyncItem[]> {
+  try {
+    const db = await openLocalDb();
+    const items = await new Promise<SyncItem[]>((resolve, reject) => {
+      const request = db.transaction('syncQueue').objectStore('syncQueue').getAll();
+      request.onsuccess = () => resolve(request.result as SyncItem[]);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    return items;
+  } catch { return []; }
+}
+
+async function removeQueued(id: string): Promise<void> {
+  try {
+    const db = await openLocalDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('syncQueue', 'readwrite');
+      tx.objectStore('syncQueue').delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch { /* Leave the item queued for a future attempt. */ }
+}
+
+async function passwordDigest(password: string, salt: Uint8Array): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const saltBuffer = new ArrayBuffer(salt.byteLength);
+  new Uint8Array(saltBuffer).set(salt);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: saltBuffer, iterations: 180000, hash: 'SHA-256' }, key, 256);
+  return Array.from(new Uint8Array(bits), (v) => v.toString(16).padStart(2, '0')).join('');
+}
+
+export async function rememberOfflineCredential(crewId: string, password: string): Promise<void> {
+  try {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const digest = await passwordDigest(password, salt);
+    const record = { salt: Array.from(salt), digest };
+    await idbWrite('offlineAuth', crewId.toLowerCase(), record);
+    localStorage.setItem(`helix_offline_auth_${crewId.toLowerCase()}`, JSON.stringify(record));
+  } catch { /* Offline unlock remains unavailable on browsers without WebCrypto. */ }
+}
+
+export async function verifyOfflineCredential(crewId: string, password: string): Promise<boolean> {
+  try {
+    const db = await openLocalDb();
+    const record = await new Promise<{ salt: number[]; digest: string } | undefined>((resolve, reject) => {
+      const request = db.transaction('offlineAuth').objectStore('offlineAuth').get(crewId.toLowerCase());
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    const saved = record || JSON.parse(localStorage.getItem(`helix_offline_auth_${crewId.toLowerCase()}`) || 'null');
+    if (!saved) return false;
+    return (await passwordDigest(password, new Uint8Array(saved.salt))) === saved.digest;
+  } catch { return false; }
+}
+
+export async function signInCrew(crewId: string, password: string): Promise<{ crewId: string; name: string }> {
+  const csrfResponse = await fetch('/auth/csrf', { credentials: 'same-origin' });
+  if (!csrfResponse.ok) throw new Error('Auth.js sign-in is unavailable. Start the HELIX server and backend.');
+  const { csrfToken } = await csrfResponse.json() as { csrfToken: string };
+  const form = new URLSearchParams({ csrfToken, crew_id: crewId, password, callbackUrl: '/', json: 'true' });
+  const response = await fetch('/auth/callback/credentials', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form,
+  });
+  if (!response.ok) throw new Error('Crew ID or password was not accepted.');
+  const sessionResponse = await fetch('/auth/session', { credentials: 'same-origin' });
+  const session = await sessionResponse.json() as { user?: { name?: string }; crewId?: string } | null;
+  if (!session?.crewId) throw new Error('Sign-in could not be confirmed. Please try again.');
+  await rememberOfflineCredential(crewId, password);
+  return { crewId: session.crewId, name: session.user?.name || session.crewId };
+}
+
+export async function signOutCrew(): Promise<void> {
+  try {
+    const response = await fetch('/auth/csrf', { credentials: 'same-origin' });
+    const { csrfToken } = await response.json() as { csrfToken: string };
+    await fetch('/auth/signout', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrfToken, callbackUrl: '/' }) });
+  } catch { /* Local sign-out still proceeds. */ }
+}
+
+export async function syncPendingOperations(): Promise<number> {
+  if (!navigator.onLine) return 0;
+  const sessionResponse = await fetch('/auth/session', { credentials: 'same-origin' }).catch(() => null);
+  const session = sessionResponse?.ok ? await sessionResponse.json().catch(() => null) as { crewId?: string } | null : null;
+  if (!session?.crewId) return 0;
+  let synced = 0;
+  for (const item of await readSyncQueue()) {
+    try {
+      const endpoint = item.kind === 'measurement' ? '/api/measure' : '/api/packet';
+      const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item.payload) });
+      if (!response.ok) break;
+      await removeQueued(item.id);
+      synced += 1;
+    } catch { break; }
+  }
+  return synced;
+}
+
+export interface DemoBackendPayload { assessment: any; stream: any; }
+
+export async function fetchDemoDashboard(stressors: string[] = []): Promise<DemoBackendPayload | null> {
+  const query = new URLSearchParams({ profile: 'commander', day: '63' });
+  stressors.forEach((stressor) => query.append('stressor', stressor));
+  try {
+    const response = await fetch(`/api/demo/dashboard?${query}`, { credentials: 'same-origin' });
+    if (!response.ok) return null;
+    return await response.json() as DemoBackendPayload;
+  } catch { return null; }
+}
+
+export function mapDemoDashboard(payload: DemoBackendPayload, currentRegions: BodyRegion[], currentIndicators: Indicator[]): {
+  regions: BodyRegion[]; runway: RunwayItem[]; oneThing: OneThingAction; indicators: Indicator[];
+} {
+  const assessment = payload.assessment;
+  const points = payload.stream?.measurements || [];
+  const statuses: Record<string, StatusLevel> = {
+    Nominal: 'nominal', Watch: 'watch', Caution: 'caution', Escalate: 'escalate',
+  };
+  const regionEntries = Object.entries(assessment.regions || {}) as Array<[string, any]>;
+  const regions = currentRegions.map((region) => {
+    const live = assessment.regions?.[region.id];
+    if (region.id === 'radiation' && assessment.stressors?.includes('radiation_event')) {
+      return { ...region, status: 'caution' as StatusLevel, runwayDays: null };
+    }
+    if (!live) return region;
+    const days = typeof live.runway === 'string' && live.runway.includes('days')
+      ? Number(live.runway.match(/[\d.]+/)?.[0] || 0) : null;
+    return { ...region, status: statuses[live.status] || 'nominal', runwayDays: days,
+      confidence: String(live.confidence || 'low').toLowerCase() as BodyRegion['confidence'] };
+  });
+  const runway = regionEntries.map(([regionId, live]) => {
+    const region = currentRegions.find((item) => item.id === regionId);
+    const days = typeof live.runway === 'string' && live.runway.includes('days')
+      ? Number(live.runway.match(/[\d.]+/)?.[0] || 0) : null;
+    const keys = regionId === 'heart_vessels' ? ['heart_rate','blood_pressure_systolic']
+      : regionId === 'mind_sleep' ? ['sleep_hours','mood_stress'] : ['exercise_minutes'];
+    const sparkline = points.slice(-7).map((point: any, index: number) => {
+      const start = points[Math.max(0, points.length - 7)] as any;
+      const vals = keys.map((key) => Math.abs(Number(point[key]) - Number(assessment.profile.baseline[key])) / Math.max(1, Number(assessment.profile.baseline[key])) * 100);
+      return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) || index;
+    });
+    return {
+      regionId: regionId as RunwayItem['regionId'], regionName: region?.name || regionId,
+      days, status: statuses[live.status] || 'nominal', confidence: String(live.confidence || 'low').toLowerCase() as RunwayItem['confidence'],
+      sparkline, topSignals: [], crossingDay: days === null ? null : Number(assessment.day) + days,
+    };
+  });
+  const primary = assessment.one_thing_today?.primary || { action: 'Keep today’s planned routine and check in again', reason: 'No notable change from the synthetic baseline.' };
+  const title = String(primary.action);
+  const targetRegion = /sleep|mood|stress/i.test(title) ? 'mind_sleep'
+    : /exercise|activity/i.test(title) ? 'bones_muscles'
+    : /blood pressure|heart/i.test(title) ? 'heart_vessels' : 'mind_sleep';
+  const backupItems = (assessment.one_thing_today?.backups || []).map((item: any, index: number) => ({
+    id: `backend-backup-${index}`, title: item.action, reason: item.reason, evidence: item.tag === 'Under study' ? 'Under study' as const : 'Recommended' as const,
+  }));
+  const oneThing: OneThingAction = {
+    id: 'backend-one-thing', title, reason: String(primary.reason),
+    evidence: primary.tag === 'Under study' ? 'Under study' : 'Recommended',
+    regionId: targetRegion as OneThingAction['regionId'], indicatorId: /sleep/i.test(title) ? 'sleep_duration' : undefined,
+    ringTarget: /sleep|rest/i.test(title) ? 'rest' : /exercise/i.test(title) ? 'move' : 'measure',
+    completed: false, whySignals: [], backups: backupItems,
+  };
+  const indicatorKeys: Record<string, string> = {
+    sleep_duration: 'sleep_hours', resting_hr: 'heart_rate',
+  };
+  const indicators = currentIndicators.map((indicator) => {
+    const key = indicatorKeys[indicator.id];
+    if (!key || !points.length) return indicator;
+    const series = points.slice(-7).map((point: any) => ({ day: `D${point.day}`, value: Number(point[key]) }));
+    return { ...indicator, value: series[series.length - 1].value, series };
+  });
+  return { regions, runway, oneThing, indicators };
+}
+
 export interface TwinPayload {
   regions: BodyRegion[];
   hazards: typeof HAZARDS_FIXTURE;
@@ -98,49 +320,46 @@ export async function submitMeasurement(payload: {
   value: number;
   note?: string;
 }): Promise<{
-  feedback: 'Looks normal' | 'Recheck in 10 min' | 'Contact flight surgeon';
+  feedback: 'Recorded for review' | 'Contact flight surgeon';
   newStatus: StatusLevel;
   updatedIndicatorId: string;
 }> {
-  const { data } = await fetchWithFallback(
-    '/api/measure',
-    () => {
+  const queueItem: SyncItem = {
+    id: `measurement-${Date.now()}-${crypto.randomUUID?.() || Math.random().toString(16).slice(2)}`,
+    kind: 'measurement', payload, createdAt: new Date().toISOString(),
+  };
+  const localResult = () => {
       const savedInd = localStorage.getItem(STORAGE_KEYS.indicators);
       const indicators: Indicator[] = savedInd
         ? JSON.parse(savedInd)
         : INDICATORS_FIXTURE;
       const target = indicators.find((i) => i.id === payload.indicatorId);
-      let newStatus: StatusLevel = 'nominal';
-      let feedback: 'Looks normal' | 'Recheck in 10 min' | 'Contact flight surgeon' =
-        'Looks normal';
-
-      if (target) {
-        const { min, max } = target.referenceRange;
-        const span = Math.max(0.5, max - min);
-        if (payload.value < min - span * 0.45 || payload.value > max + span * 0.55) {
-          newStatus = 'escalate';
-          feedback = 'Contact flight surgeon';
-        } else if (payload.value < min || payload.value > max) {
-          newStatus = 'caution';
-          feedback = 'Recheck in 10 min';
-        } else if (Math.abs(payload.value - target.baseline) > span * 0.35) {
-          newStatus = 'watch';
-          feedback = 'Looks normal';
-        }
-      }
+      const newStatus: StatusLevel = target?.status || 'nominal';
+      const feedback: 'Recorded for review' = 'Recorded for review';
 
       return {
         feedback,
         newStatus,
         updatedIndicatorId: payload.indicatorId,
       };
-    },
-    {
+  };
+  let data = localResult();
+  let fromCache = true;
+  const sessionResponse = await fetch('/auth/session', { credentials: 'same-origin' }).catch(() => null);
+  const session = sessionResponse?.ok ? await sessionResponse.json().catch(() => null) as { crewId?: string } | null : null;
+  if (navigator.onLine && session?.crewId) {
+    const result = await fetchWithFallback(
+      '/api/measure', localResult,
+      {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }
-  );
+      }
+    );
+    data = result.data;
+    fromCache = result.fromCache;
+  }
+  if (!navigator.onLine || (fromCache && session?.crewId)) await queueSync(queueItem);
   return data;
 }
 
@@ -171,14 +390,16 @@ export async function queueSurgeonPacket(
       queuedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
     localStorage.setItem(STORAGE_KEYS.packet, JSON.stringify(queued));
+    await idbWrite('state', STORAGE_KEYS.packet, queued);
+    await queueSync({ id: `packet-${packet.id}`, kind: 'packet', payload: packet, createdAt: new Date().toISOString() });
     return queued;
   }
 
-  const { data } = await fetchWithFallback(
+  const { data, fromCache } = await fetchWithFallback(
     '/api/packet',
     () => ({
       ...packet,
-      status: 'sending' as const,
+      status: 'queued' as const,
       queuedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     }),
     {
@@ -188,6 +409,8 @@ export async function queueSurgeonPacket(
     }
   );
   localStorage.setItem(STORAGE_KEYS.packet, JSON.stringify(data));
+  await idbWrite('state', STORAGE_KEYS.packet, data);
+  if (fromCache) await queueSync({ id: `packet-${packet.id}`, kind: 'packet', payload: packet, createdAt: new Date().toISOString() });
   return data;
 }
 
@@ -206,6 +429,7 @@ export function saveLocalState<T>(key: keyof typeof STORAGE_KEYS, value: T): voi
   } catch {
     // Ignore storage quota issues
   }
+  void idbWrite('state', STORAGE_KEYS[key], value);
 }
 
 export function getInitialRings(): HealthRingsState {

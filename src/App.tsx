@@ -14,10 +14,14 @@ import {
   fetchOneThing,
   fetchRunway,
   fetchTwin,
+  fetchDemoDashboard,
+  mapDemoDashboard,
   loadLocalState,
   queueSurgeonPacket,
   saveLocalState,
   submitMeasurement,
+  signOutCrew,
+  syncPendingOperations,
 } from './lib/api';
 import { applyEnvironmentAndHazardsToRunway } from './lib/utils';
 import {
@@ -105,6 +109,7 @@ export default function App() {
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
   const isOnline = browserOnline && !settings.offlineSimulated;
+  const [backendStressors, setBackendStressors] = useState<string[]>([]);
 
   // Core physiological state
   const [regions, setRegions] = useState<BodyRegion[]>(REGIONS_FIXTURE);
@@ -185,6 +190,21 @@ export default function App() {
 
   // Online / Offline listeners
   useEffect(() => {
+    void fetch('/auth/session', { credentials: 'same-origin' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((session: { crewId?: string; user?: { name?: string } } | null) => {
+        if (!session?.crewId) return;
+        setProfile((current) => {
+          const next = { ...current, crewId: session.crewId!, name: session.user?.name || current.name,
+            authMethod: 'credentials' as const };
+          saveLocalState('profile', next);
+          return next;
+        });
+        setScreen('home');
+      }).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     const onOnline = () => setBrowserOnline(true);
     const onOffline = () => setBrowserOnline(false);
     window.addEventListener('online', onOnline);
@@ -194,6 +214,10 @@ export default function App() {
       window.removeEventListener('offline', onOffline);
     };
   }, []);
+
+  useEffect(() => {
+    if (isOnline) void syncPendingOperations();
+  }, [isOnline]);
 
   // Load initial data from Express API with local JSON fixture fallback
   useEffect(() => {
@@ -300,6 +324,19 @@ export default function App() {
     setDrawerOpen(true);
   };
 
+  const refreshDemoDashboard = async (stressors = backendStressors) => {
+    const payload = await fetchDemoDashboard(stressors);
+    if (!payload) return;
+    const mapped = mapDemoDashboard(payload, regions, indicators);
+    setRegions(mapped.regions);
+    setBaseRunway(mapped.runway);
+    setOneThing(mapped.oneThing);
+    setIndicators(mapped.indicators);
+    saveLocalState('regions', mapped.regions);
+    saveLocalState('indicators', mapped.indicators);
+    saveLocalState('oneThing', mapped.oneThing);
+  };
+
   const handleToggleHazard = (id: HazardId) => {
     setActiveHazards((prev) =>
       prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id]
@@ -392,30 +429,34 @@ export default function App() {
     showToast('Action logged. Your Rest ring updated gently.');
   };
 
+  const handleIncrementRing = (key: 'move' | 'rest' | 'connect') => {
+    setRings((prev) => {
+      const nextVal = Math.min(1, Number((prev[key] + 0.25).toFixed(2)));
+      const next = { ...prev, [key]: nextVal };
+      saveLocalState('rings', next);
+      if (nextVal >= 1 && prev[key] < 1) {
+        showToast(`${key.charAt(0).toUpperCase() + key.slice(1)} ring complete.`);
+      }
+      return next;
+    });
+  };
+
   const handleQueuePacket = async () => {
     const updated = await queueSurgeonPacket(packet, isOnline);
     setPacket(updated);
     if (isOnline) {
-      showToast('Packet queued for transmission.');
-      setTimeout(() => {
-        const delivered: PacketState = {
-          ...updated,
-          status: 'delivered',
-          deliveredAt: new Date().toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-        };
-        setPacket(delivered);
-        saveLocalState('packet', delivered);
-        showToast('Flight Surgeon Packet delivered.');
-      }, 1800);
+      showToast('Summary packet prepared and queued. Use the approved mission Earth link to send it.');
     } else {
       showToast('Saved offline — queued to send when Earth link resumes.');
     }
   };
 
   const handleInjectStressor = (type: 'solar' | 'co2' | 'sleep' | 'eva') => {
+    const stressorByType: Record<typeof type, string[]> = {
+      solar: ['radiation_event'], co2: ['co2_rise'], sleep: ['sleep_debt', 'isolation_stress'], eva: ['eva_strain'],
+    };
+    const nextStressors = Array.from(new Set([...backendStressors, ...stressorByType[type]]));
+    setBackendStressors(nextStressors);
     if (type === 'solar') {
       setActiveHazards(['radiation', 'distance']);
       setRegions((prev) =>
@@ -469,6 +510,7 @@ export default function App() {
       );
       showToast('Injected EVA Strain: Heart & Vessels moved to Caution.');
     }
+    void refreshDemoDashboard(nextStressors);
   };
 
   const handleResetDemoData = () => {
@@ -478,6 +520,7 @@ export default function App() {
     setOneThing(ONE_THING_FIXTURE);
     setRings(INITIAL_RINGS_FIXTURE);
     setActiveHazards([]);
+    setBackendStressors([]);
     setWhatIf(DEFAULT_WHAT_IF);
     saveLocalState('regions', REGIONS_FIXTURE);
     saveLocalState('indicators', INDICATORS_FIXTURE);
@@ -515,6 +558,7 @@ export default function App() {
           setProfile(nextProfile);
           saveLocalState('profile', nextProfile);
           setScreen('profile');
+          if (authMethod === 'demo' || authMethod === 'credentials') void refreshDemoDashboard([]);
         }}
       />
     );
@@ -589,8 +633,12 @@ export default function App() {
           setFlightSchoolOpen(true);
         }}
         onOpenSettings={() => setSettingsOpen(true)}
-        onSignOut={() => setScreen('signin')}
+        onSignOut={() => { void signOutCrew(); setScreen('signin'); }}
       />
+
+      <div className="px-4 py-1.5 text-center text-[10px] tracking-wide text-[#FFB547] bg-[#FFB547]/[0.06] border-b border-[#FFB547]/20">
+        SYNTHETIC DATA · Demo trend bands only · Self-assessment support, not clinical advice
+      </div>
 
       <DemoModeBar
         active={demoActive}
@@ -705,7 +753,11 @@ export default function App() {
         )}
 
         {homeTab === 'crew' && (
-          <CrewScreen crew={crew} colorBlindSafe={settings.colorBlindSafe} />
+          <CrewScreen
+            crew={crew}
+            colorBlindSafe={settings.colorBlindSafe}
+            onBuddyCheckIn={() => handleIncrementRing('connect')}
+          />
         )}
 
         {homeTab === 'summary' && (
@@ -735,17 +787,7 @@ export default function App() {
           setWizardOpen(true);
         }}
         onOpenSurgeonGuide={() => setHomeTab('summary')}
-        onIncrementRing={(key) => {
-          setRings((prev) => {
-            const nextVal = Math.min(1, Number((prev[key] + 0.25).toFixed(2)));
-            const next = { ...prev, [key]: nextVal };
-            saveLocalState('rings', next);
-            if (nextVal >= 1 && prev[key] < 1) {
-              showToast(`${key.charAt(0).toUpperCase() + key.slice(1)} ring complete.`);
-            }
-            return next;
-          });
-        }}
+        onIncrementRing={handleIncrementRing}
       />
 
       {/* Interactive Overlays & Drawers */}

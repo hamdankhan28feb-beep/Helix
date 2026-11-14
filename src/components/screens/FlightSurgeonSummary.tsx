@@ -41,22 +41,62 @@ export const FlightSurgeonSummary: React.FC<FlightSurgeonSummaryProps> = ({
   onQueuePacket,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const [consentTiers, setConsentTiers] = useState({
+    includeDriftStatus: true,
+    includeVitals: true,
+    includeNotes: true,
+    includeImagery: false,
+  });
 
   const driftedRegions = regions.filter((r) => r.status !== 'nominal');
   const envCfg = ENVIRONMENT_CONFIG[environment];
 
-  const handleCopyText = () => {
-    const summaryText = [
+  const handleCopyText = async () => {
+    const summaryLines = [
       `HELIX FLIGHT SURGEON SUMMARY — ${profile.name} (${profile.crewId})`,
       `Environment: ${envCfg.label} (${envCfg.earthDelayText})`,
-      `Drifted regions: ${
-        driftedRegions.map((r) => `${r.name} [${r.status}]`).join(', ') || 'None'
-      }`,
-      `Crew notes: ${packet.notes || 'None'}`,
-    ].join('\n');
-    navigator.clipboard?.writeText(summaryText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    ];
+    if (consentTiers.includeDriftStatus) {
+      summaryLines.push(
+        `Drifted regions: ${
+          driftedRegions.map((r) => `${r.name} [${r.status}]`).join(', ') || 'None'
+        }`
+      );
+    }
+    if (consentTiers.includeVitals) {
+      summaryLines.push(
+        `Key vitals: ${indicators.slice(0, 5).map(i => `${i.name}: ${i.value} ${i.unit}`).join('; ')}`
+      );
+    }
+    if (consentTiers.includeNotes) {
+      summaryLines.push(`Crew notes: ${packet.notes || 'None'}`);
+    }
+    summaryLines.push(
+      `Consent tiers authorized: ${Object.entries(consentTiers).filter(([, v]) => v).map(([k]) => k.replace('include', '')).join(', ')}`
+    );
+    const summaryText = summaryLines.join('\n');
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(summaryText);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = summaryText;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        const succeeded = document.execCommand('copy');
+        textArea.remove();
+        if (!succeeded) throw new Error('Clipboard copy unavailable');
+      }
+      setCopyError(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+      setCopyError(true);
+    }
   };
 
   return (
@@ -200,6 +240,154 @@ export const FlightSurgeonSummary: React.FC<FlightSurgeonSummaryProps> = ({
           />
         </section>
 
+        {/* Earth Transmission Consent Tiers */}
+        <section className="p-4 rounded-2xl bg-[#070B14]/70 border border-white/[0.08] space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[#E8EEF7]">
+              Transmission Consent Tiers
+            </h2>
+            <span className="text-[11px] text-[#7FB2FF] bg-[#7FB2FF]/10 px-2 py-0.5 rounded-full">
+              Crew Privacy Control
+            </span>
+          </div>
+          <p className="text-xs text-[#8A97AD]">
+            Choose exactly which data layers are packaged for Earth flight surgeons. Private crew notes and images are strictly opt-in.
+          </p>
+
+          {/* Quick Preset Buttons (Private / Trends / Full) */}
+          <div className="flex flex-wrap items-center gap-2 pt-1 pb-1">
+            <span className="text-xs text-[#8A97AD]">Tier Presets:</span>
+            <button
+              type="button"
+              onClick={() =>
+                setConsentTiers({
+                  includeDriftStatus: false,
+                  includeVitals: false,
+                  includeNotes: false,
+                  includeImagery: false,
+                })
+              }
+              className={cn(
+                'px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer',
+                !consentTiers.includeDriftStatus &&
+                  !consentTiers.includeVitals &&
+                  !consentTiers.includeNotes &&
+                  !consentTiers.includeImagery
+                  ? 'bg-[#7FB2FF] text-[#070B14] border-[#7FB2FF]'
+                  : 'bg-[#0E1522] text-[#8A97AD] border-white/10 hover:border-white/20'
+              )}
+            >
+              Private (Local only)
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setConsentTiers({
+                  includeDriftStatus: true,
+                  includeVitals: false,
+                  includeNotes: false,
+                  includeImagery: false,
+                })
+              }
+              className={cn(
+                'px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer',
+                consentTiers.includeDriftStatus &&
+                  !consentTiers.includeVitals &&
+                  !consentTiers.includeNotes &&
+                  !consentTiers.includeImagery
+                  ? 'bg-[#7FB2FF] text-[#070B14] border-[#7FB2FF]'
+                  : 'bg-[#0E1522] text-[#8A97AD] border-white/10 hover:border-white/20'
+              )}
+            >
+              Trends (Runway only)
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setConsentTiers({
+                  includeDriftStatus: true,
+                  includeVitals: true,
+                  includeNotes: true,
+                  includeImagery: true,
+                })
+              }
+              className={cn(
+                'px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer',
+                consentTiers.includeDriftStatus &&
+                  consentTiers.includeVitals &&
+                  consentTiers.includeNotes &&
+                  consentTiers.includeImagery
+                  ? 'bg-[#7FB2FF] text-[#070B14] border-[#7FB2FF]'
+                  : 'bg-[#0E1522] text-[#8A97AD] border-white/10 hover:border-white/20'
+              )}
+            >
+              Full (Clinical Telemetry)
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#0E1522]/60 border border-white/[0.06] cursor-pointer hover:border-white/20 transition-colors">
+              <input
+                type="checkbox"
+                checked={consentTiers.includeDriftStatus}
+                onChange={(e) =>
+                  setConsentTiers((prev) => ({ ...prev, includeDriftStatus: e.target.checked }))
+                }
+                className="mt-0.5 rounded border-white/20 text-[#7FB2FF] focus:ring-0"
+              />
+              <div className="text-xs">
+                <span className="font-medium text-[#E8EEF7] block">Tier 1: System Drift & Runway</span>
+                <span className="text-[#8A97AD] text-[11px]">Anatomical region statuses and runway projections</span>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#0E1522]/60 border border-white/[0.06] cursor-pointer hover:border-white/20 transition-colors">
+              <input
+                type="checkbox"
+                checked={consentTiers.includeVitals}
+                onChange={(e) =>
+                  setConsentTiers((prev) => ({ ...prev, includeVitals: e.target.checked }))
+                }
+                className="mt-0.5 rounded border-white/20 text-[#7FB2FF] focus:ring-0"
+              />
+              <div className="text-xs">
+                <span className="font-medium text-[#E8EEF7] block">Tier 2: Discrete Vitals</span>
+                <span className="text-[#8A97AD] text-[11px]">Heart rate, BP, sleep, and core indicators</span>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#0E1522]/60 border border-white/[0.06] cursor-pointer hover:border-white/20 transition-colors">
+              <input
+                type="checkbox"
+                checked={consentTiers.includeNotes}
+                onChange={(e) =>
+                  setConsentTiers((prev) => ({ ...prev, includeNotes: e.target.checked }))
+                }
+                className="mt-0.5 rounded border-white/20 text-[#7FB2FF] focus:ring-0"
+              />
+              <div className="text-xs">
+                <span className="font-medium text-[#E8EEF7] block">Tier 3: Crew Subjective Notes</span>
+                <span className="text-[#8A97AD] text-[11px]">Self-reported symptoms and context text</span>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#0E1522]/60 border border-white/[0.06] cursor-pointer hover:border-white/20 transition-colors">
+              <input
+                type="checkbox"
+                checked={consentTiers.includeImagery}
+                onChange={(e) =>
+                  setConsentTiers((prev) => ({ ...prev, includeImagery: e.target.checked }))
+                }
+                className="mt-0.5 rounded border-white/20 text-[#7FB2FF] focus:ring-0"
+              />
+              <div className="text-xs">
+                <span className="font-medium text-[#E8EEF7] block">Tier 4: Captured Photos / Ultrasound</span>
+                <span className="text-[#8A97AD] text-[11px]">Visual inspection files and sensor attachments</span>
+              </div>
+            </label>
+          </div>
+        </section>
+
         {/* Send / Copy Footer */}
         <footer className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-white/[0.08]">
           <p className="text-[11px] text-[#8A97AD]">
@@ -208,7 +396,7 @@ export const FlightSurgeonSummary: React.FC<FlightSurgeonSummaryProps> = ({
 
           <div className="flex items-center gap-2.5">
             <Button type="button" variant="secondary" onClick={handleCopyText}>
-              {copied ? 'Copied summary' : 'Copy plain text'}
+              {copied ? 'Copied summary' : copyError ? 'Copy unavailable' : 'Copy plain text'}
             </Button>
             <Button
               type="button"

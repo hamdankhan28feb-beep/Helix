@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Camera,
   CheckCircle2,
-  Clock,
   ShieldAlert,
   X,
   ArrowRight,
@@ -23,7 +22,7 @@ interface MeasurementWizardProps {
     value: number;
     note?: string;
   }) => Promise<{
-    feedback: 'Looks normal' | 'Recheck in 10 min' | 'Contact flight surgeon';
+    feedback: 'Recorded for review' | 'Contact flight surgeon';
     newStatus: StatusLevel;
   }>;
   onOpenSurgeonPacket: () => void;
@@ -44,9 +43,14 @@ export const MeasurementWizard: React.FC<MeasurementWizardProps> = ({
   const [numericVal, setNumericVal] = useState<string>('');
   const [journalNote, setJournalNote] = useState('');
   const [capturedPhotoLabel, setCapturedPhotoLabel] = useState<string | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageQuality, setImageQuality] = useState<{
+    exposure: 'Optimal' | 'Low light' | 'Overexposed';
+    sharpness: 'Clear' | 'Possible blur';
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{
-    feedback: 'Looks normal' | 'Recheck in 10 min' | 'Contact flight surgeon';
+    feedback: 'Recorded for review' | 'Contact flight surgeon';
     newStatus: StatusLevel;
   } | null>(null);
 
@@ -60,8 +64,47 @@ export const MeasurementWizard: React.FC<MeasurementWizardProps> = ({
       setResult(null);
       setJournalNote('');
       setCapturedPhotoLabel(null);
+      setImagePreviewUrl(null);
+      setImageQuality(null);
     }
   }, [isOpen, initialIndicatorId, indicators]);
+
+  const handleImageSelect = (file: File) => {
+    const url = URL.createObjectURL(file);
+    setImagePreviewUrl(url);
+    setCapturedPhotoLabel(`Attached: ${file.name}`);
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, 64, 64);
+        const data = ctx.getImageData(0, 0, 64, 64).data;
+        let totalLum = 0;
+        let diff = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          totalLum += lum;
+          if (i >= 4) {
+            const prevLum =
+              0.299 * data[i - 4] + 0.587 * data[i - 3] + 0.114 * data[i - 2];
+            diff += Math.abs(lum - prevLum);
+          }
+        }
+        const avgLum = totalLum / (data.length / 4);
+        const avgDiff = diff / (data.length / 4);
+        setImageQuality({
+          exposure:
+            avgLum < 45 ? 'Low light' : avgLum > 215 ? 'Overexposed' : 'Optimal',
+          sharpness: avgDiff > 6 ? 'Clear' : 'Possible blur',
+        });
+      }
+    };
+    img.src = url;
+  };
 
   if (!isOpen) return null;
 
@@ -175,7 +218,7 @@ export const MeasurementWizard: React.FC<MeasurementWizardProps> = ({
                 <p className="text-[#E8EEF7] font-medium">
                   Your baseline: {indicator.baseline} {indicator.unit}
                 </p>
-                <p>Reference range: {indicator.referenceRange.label}</p>
+                <p>No clinical range is configured. Follow mission medical limits.</p>
               </div>
             </div>
 
@@ -205,12 +248,12 @@ export const MeasurementWizard: React.FC<MeasurementWizardProps> = ({
                 </div>
               </div>
             ) : indicator.inputType === 'camera' ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <label className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-[#070B14] border border-dashed border-[#7FB2FF]/50 text-xs font-medium text-[#7FB2FF] hover:bg-[#7FB2FF]/10 cursor-pointer">
+                  <label className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-[#070B14] border border-dashed border-[#7FB2FF]/50 text-xs font-medium text-[#7FB2FF] hover:bg-[#7FB2FF]/10 cursor-pointer transition-colors">
                     <Camera className="w-4 h-4" aria-hidden="true" />
                     <span>
-                      {capturedPhotoLabel || 'Capture or attach macro photo'}
+                      {capturedPhotoLabel || 'Capture or attach optical / ultrasound image'}
                     </span>
                     <input
                       type="file"
@@ -219,16 +262,80 @@ export const MeasurementWizard: React.FC<MeasurementWizardProps> = ({
                       className="sr-only"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        setCapturedPhotoLabel(
-                          file ? `Attached: ${file.name}` : 'Macro image captured'
-                        );
+                        if (file) handleImageSelect(file);
                       }}
                     />
                   </label>
                 </div>
+
+                {/* Quality Check Badges */}
+                {imageQuality && (
+                  <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-[#070B14] border border-white/[0.08] text-xs">
+                    <span className="text-[#8A97AD]">Intake Check:</span>
+                    <span
+                      className={cn(
+                        'px-2 py-0.5 rounded-md font-mono text-[11px]',
+                        imageQuality.exposure === 'Optimal'
+                          ? 'bg-[#3DE0C5]/15 text-[#3DE0C5] border border-[#3DE0C5]/30'
+                          : 'bg-[#F4B860]/15 text-[#F4B860] border border-[#F4B860]/30'
+                      )}
+                    >
+                      Exposure: {imageQuality.exposure}
+                    </span>
+                    <span
+                      className={cn(
+                        'px-2 py-0.5 rounded-md font-mono text-[11px]',
+                        imageQuality.sharpness === 'Clear'
+                          ? 'bg-[#3DE0C5]/15 text-[#3DE0C5] border border-[#3DE0C5]/30'
+                          : 'bg-[#FF8C66]/15 text-[#FF8C66] border border-[#FF8C66]/30'
+                      )}
+                    >
+                      Hold: {imageQuality.sharpness}
+                    </span>
+                  </div>
+                )}
+
+                {/* Side-by-Side Change Viewer */}
+                <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl bg-[#070B14] border border-white/[0.08]">
+                  <div className="space-y-1.5 text-center">
+                    <span className="text-[11px] text-[#8A97AD] font-medium block">
+                      Earth Baseline Reference
+                    </span>
+                    <div className="h-24 rounded-xl bg-[#0E1522] border border-white/[0.06] flex flex-col items-center justify-center p-2 text-center">
+                      <div className="w-8 h-8 rounded-full border border-dashed border-[#3DE0C5]/40 flex items-center justify-center mb-1">
+                        <div className="w-3 h-3 rounded-full bg-[#3DE0C5]/40" />
+                      </div>
+                      <span className="text-[10px] text-[#8A97AD]">Baseline tissue</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 text-center">
+                    <span className="text-[11px] text-[#7FB2FF] font-medium block">
+                      Current Capture
+                    </span>
+                    <div className="h-24 rounded-xl bg-[#0E1522] border border-white/[0.06] overflow-hidden flex items-center justify-center">
+                      {imagePreviewUrl ? (
+                        <img
+                          src={imagePreviewUrl}
+                          alt="Captured visual"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-[10px] text-[#8A97AD]/60 p-2">
+                          No capture yet
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-[#8A97AD] italic">
+                  Visual comparison for astronaut and flight-surgeon inspection. No automated diagnostic interpretation.
+                </p>
+
                 <div>
                   <label htmlFor="wizard-num" className="block text-xs text-[#8A97AD] mb-1.5">
-                    Number of visible irritated spots (0 = clear)
+                    Count of visible marks or severity self-score (0 = nominal)
                   </label>
                   <input
                     id="wizard-num"
@@ -305,19 +412,15 @@ export const MeasurementWizard: React.FC<MeasurementWizardProps> = ({
             <div
               className={cn(
                 'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center border',
-                result.feedback === 'Looks normal'
-                  ? 'bg-[#3DE0C5]/15 border-[#3DE0C5]/40 text-[#3DE0C5]'
-                  : result.feedback === 'Recheck in 10 min'
-                  ? 'bg-[#FFB547]/15 border-[#FFB547]/40 text-[#FFB547]'
-                  : 'bg-[#FF6B5E]/15 border-[#FF6B5E]/40 text-[#FF6B5E]'
+                result.feedback === 'Contact flight surgeon'
+                  ? 'bg-[#FF6B5E]/15 border-[#FF6B5E]/40 text-[#FF6B5E]'
+                  : 'bg-[#3DE0C5]/15 border-[#3DE0C5]/40 text-[#3DE0C5]'
               )}
             >
-              {result.feedback === 'Looks normal' ? (
-                <CheckCircle2 className="w-7 h-7" aria-hidden="true" />
-              ) : result.feedback === 'Recheck in 10 min' ? (
-                <Clock className="w-7 h-7" aria-hidden="true" />
-              ) : (
+              {result.feedback === 'Contact flight surgeon' ? (
                 <ShieldAlert className="w-7 h-7" aria-hidden="true" />
+              ) : (
+                <CheckCircle2 className="w-7 h-7" aria-hidden="true" />
               )}
             </div>
 
@@ -326,7 +429,7 @@ export const MeasurementWizard: React.FC<MeasurementWizardProps> = ({
                 {result.feedback}
               </h2>
               <p className="mt-1.5 text-sm text-[#8A97AD]">
-                Recorded <span className="font-mono-tabular text-[#E8EEF7]">{numericVal} {indicator.unit}</span>. Your Ghost Twin, Runway, and Measure ring updated immediately.
+                Saved <span className="font-mono-tabular text-[#E8EEF7]">{numericVal} {indicator.unit}</span> on this device. HELIX does not interpret this result; follow mission medical limits.
               </p>
             </div>
 

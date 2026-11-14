@@ -24,23 +24,11 @@ export const HelpMeNowModal: React.FC<HelpMeNowModalProps> = ({
   onOpenSurgeonPacket,
 }) => {
   const [selected, setSelected] = useState<HelpSymptomProtocol | null>(null);
-  const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
-
   useEffect(() => {
-    if (timerSeconds === null || timerSeconds <= 0) return;
-    const t = setInterval(() => {
-      setTimerSeconds((s) => (s !== null && s > 0 ? s - 1 : 0));
-    }, 1000);
-    return () => clearInterval(t);
-  }, [timerSeconds]);
+    if (!isOpen) setSelected(null);
+  }, [isOpen]);
 
   if (!isOpen) return null;
-
-  const formatTimer = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m}:${String(s).padStart(2, '0')}`;
-  };
 
   return (
     <div
@@ -64,7 +52,6 @@ export const HelpMeNowModal: React.FC<HelpMeNowModalProps> = ({
             type="button"
             onClick={() => {
               setSelected(null);
-              setTimerSeconds(null);
               onClose();
             }}
             className="p-2.5 rounded-2xl bg-[#151E2E] border border-white/10 text-[#8A97AD] hover:text-[#E8EEF7] cursor-pointer"
@@ -87,7 +74,6 @@ export const HelpMeNowModal: React.FC<HelpMeNowModalProps> = ({
                   type="button"
                   onClick={() => {
                     setSelected(proto);
-                    setTimerSeconds(null);
                   }}
                   className="p-5 rounded-2xl cockpit-panel hover:border-[#7FB2FF]/60 text-left transition-colors cursor-pointer min-h-[96px]"
                 >
@@ -108,7 +94,6 @@ export const HelpMeNowModal: React.FC<HelpMeNowModalProps> = ({
               type="button"
               onClick={() => {
                 setSelected(null);
-                setTimerSeconds(null);
               }}
               className="inline-flex items-center gap-1.5 text-xs font-medium text-[#7FB2FF] hover:underline cursor-pointer"
             >
@@ -136,25 +121,15 @@ export const HelpMeNowModal: React.FC<HelpMeNowModalProps> = ({
               <div>
                 <div className="flex items-center gap-2 text-sm font-semibold text-[#7FB2FF]">
                   <Clock className="w-4 h-4" aria-hidden="true" />
-                  <span>Retest in {selected.retestMinutes} minutes</span>
+                  <span>When to recheck</span>
                 </div>
                 <p className="mt-1 text-xs text-[#8A97AD]">
-                  Rest quietly first, then check again to see if the feeling eases.
+                  {selected.retestGuidance}
                 </p>
               </div>
-              {timerSeconds === null ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setTimerSeconds(selected.retestMinutes * 60)}
-                >
-                  Start {selected.retestMinutes}m timer
-                </Button>
-              ) : (
-                <div className="px-4 py-2 rounded-xl bg-[#070B14] border border-[#7FB2FF]/40 font-mono-tabular text-lg font-semibold text-[#7FB2FF]">
-                  {timerSeconds === 0 ? 'Ready to retest' : formatTimer(timerSeconds)}
-                </div>
-              )}
+              <Button type="button" variant="secondary" onClick={() => onOpenSurgeonPacket(`Crew symptom report: ${selected.label}. Followed HELIX offline self-care guide; see mission protocol for retest timing.`)}>
+                Open crew summary
+              </Button>
             </div>
 
             {/* When to Contact Flight Surgeon */}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Eye, EyeOff, Loader2, WifiOff } from 'lucide-react';
-import { getAuthConfig } from '../../lib/api';
+import { getAuthConfig, signInCrew, verifyOfflineCredential } from '../../lib/api';
 import { Button } from '../ui/Primitives';
 
 interface SignInScreenProps {
@@ -28,7 +28,7 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
     getAuthConfig().then((cfg) => setGoogleConfigured(cfg.googleConfigured));
   }, [isOnline]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -36,19 +36,60 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
       setError('Enter your Crew ID (for example, CDR-01).');
       return;
     }
-    if (isOnline && password.length < 4) {
-      setError('Password must be at least 4 characters.');
+    if (password.length < 10) {
+      setError('Use a password with at least 10 characters.');
       return;
     }
 
     setLoading(true);
-    setTimeout(() => {
+    if (isOnline) {
+      try {
+        const signedIn = await signInCrew(crewId.trim(), password);
+        setLoading(false);
+        onSuccess({ crewId: signedIn.crewId, name: signedIn.name, authMethod: 'credentials' });
+        return;
+      } catch (err) {
+        // Previously authenticated users can still unlock their locally cached profile.
+        if (await verifyOfflineCredential(crewId.trim(), password)) {
+          setLoading(false);
+          onSuccess({ crewId: crewId.trim(), authMethod: 'offline' });
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Sign-in failed. Check your connection and try again.');
+        setLoading(false);
+        return;
+      }
+    }
+    const valid = await verifyOfflineCredential(crewId.trim(), password);
+    setLoading(false);
+    if (!valid) {
+      setError('This device has no matching offline profile yet. Sign in once while connected to unlock it here.');
+      return;
+    }
+    {
       setLoading(false);
       onSuccess({
         crewId: crewId.trim().toUpperCase(),
-        authMethod: isOnline ? 'credentials' : 'offline',
+        authMethod: 'offline',
       });
-    }, 350);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      const csrfResponse = await fetch('/auth/csrf', { credentials: 'same-origin' });
+      const { csrfToken } = await csrfResponse.json() as { csrfToken: string };
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/auth/signin/google';
+      for (const [name, value] of Object.entries({ csrfToken, callbackUrl: '/' })) {
+        const input = document.createElement('input');
+        input.type = 'hidden'; input.name = name; input.value = value; form.appendChild(input);
+      }
+      document.body.appendChild(form); form.submit();
+    } catch {
+      setError('Google sign-in is unavailable. Use your Crew ID or demo crew.');
+    }
   };
 
   return (
@@ -81,13 +122,7 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
           <div className="mb-5">
             <button
               type="button"
-              onClick={() =>
-                onSuccess({
-                  crewId: 'CDR-01',
-                  name: 'Maya Lin',
-                  authMethod: 'google',
-                })
-              }
+              onClick={handleGoogleSignIn}
               className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-xl bg-white text-[#1F1F1F] font-medium text-sm hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -135,10 +170,10 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
             />
           </div>
 
-          {isOnline && (
+          {
             <div>
               <label htmlFor="crew-pass" className="block text-xs font-medium text-[#8A97AD] mb-1.5">
-                Password
+                {isOnline ? 'Password' : 'Local profile password'}
               </label>
               <div className="relative">
                 <input
@@ -164,7 +199,7 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
                 </button>
               </div>
             </div>
-          )}
+          }
 
           {error && (
             <p role="alert" className="text-xs text-[#FF6B5E] bg-[#FF6B5E]/10 border border-[#FF6B5E]/30 rounded-xl px-3 py-2">
@@ -200,13 +235,22 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
           <Button
             type="button"
             variant="secondary"
-            onClick={() =>
-              onSuccess({
-                crewId: 'CDR-01',
-                name: 'Maya Lin',
-                authMethod: 'demo',
-              })
-            }
+            disabled={loading}
+            onClick={async () => {
+              setError(null); setCrewId('commander'); setPassword('commander-demo'); setLoading(true);
+              if (!isOnline && await verifyOfflineCredential('commander', 'commander-demo')) {
+                setLoading(false); onSuccess({ crewId: 'commander', name: 'Commander Demo', authMethod: 'offline' }); return;
+              }
+              try {
+                const signedIn = await signInCrew('commander', 'commander-demo');
+                setLoading(false); onSuccess({ crewId: signedIn.crewId, name: signedIn.name, authMethod: 'demo' });
+              } catch (err) {
+                if (await verifyOfflineCredential('commander', 'commander-demo')) {
+                  setLoading(false); onSuccess({ crewId: 'commander', name: 'Commander Demo', authMethod: 'offline' }); return;
+                }
+                setLoading(false); setError(err instanceof Error ? err.message : 'Demo sign-in unavailable.');
+              }
+            }}
           >
             Use demo crew
           </Button>

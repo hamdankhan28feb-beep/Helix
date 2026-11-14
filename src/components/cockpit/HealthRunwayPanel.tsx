@@ -47,7 +47,7 @@ export const HealthRunwayPanel: React.FC<HealthRunwayPanelProps> = ({
           <div>
             <h2 className="text-sm font-semibold text-[#E8EEF7]">Health Runway</h2>
             <p className="text-xs text-[#8A97AD] mt-0.5">
-              How long each system stays in safe range
+              How long until a trend may need attention
             </p>
           </div>
           <button
@@ -154,7 +154,7 @@ export const HealthRunwayPanel: React.FC<HealthRunwayPanelProps> = ({
       </div>
 
       <p className="text-[11px] text-[#8A97AD] leading-relaxed pt-2 border-t border-white/[0.06]">
-        Runway estimates days before drift crosses your personal self-care threshold.
+        Simple projection from synthetic data; demo trend marker, not a medical forecast.
       </p>
     </aside>
   );
