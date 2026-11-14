@@ -1,0 +1,421 @@
+import React, { useState } from 'react';
+import {
+  CheckCircle2,
+  Clock,
+  Send,
+  WifiOff,
+  FileText,
+} from 'lucide-react';
+import { ENVIRONMENT_CONFIG } from '../../lib/tokens';
+import { cn } from '../../lib/utils';
+import {
+  BodyRegion,
+  Indicator,
+  MissionEnvironment,
+  PacketState,
+  UserProfile,
+} from '../../types/helix';
+import { Button, StatusIndicator } from '../ui/Primitives';
+
+interface FlightSurgeonSummaryProps {
+  profile: UserProfile;
+  environment: MissionEnvironment;
+  regions: BodyRegion[];
+  indicators: Indicator[];
+  packet: PacketState;
+  isOnline: boolean;
+  colorBlindSafe: boolean;
+  onUpdateNotes: (notes: string) => void;
+  onQueuePacket: () => void;
+}
+
+export const FlightSurgeonSummary: React.FC<FlightSurgeonSummaryProps> = ({
+  profile,
+  environment,
+  regions,
+  indicators,
+  packet,
+  isOnline,
+  colorBlindSafe,
+  onUpdateNotes,
+  onQueuePacket,
+}) => {
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const [consentTiers, setConsentTiers] = useState({
+    includeDriftStatus: true,
+    includeVitals: true,
+    includeNotes: true,
+    includeImagery: false,
+  });
+
+  const driftedRegions = regions.filter((r) => r.status !== 'nominal');
+  const envCfg = ENVIRONMENT_CONFIG[environment];
+
+  const handleCopyText = async () => {
+    const summaryLines = [
+      `HELIX FLIGHT SURGEON SUMMARY — ${profile.name} (${profile.crewId})`,
+      `Environment: ${envCfg.label} (${envCfg.earthDelayText})`,
+    ];
+    if (consentTiers.includeDriftStatus) {
+      summaryLines.push(
+        `Drifted regions: ${
+          driftedRegions.map((r) => `${r.name} [${r.status}]`).join(', ') || 'None'
+        }`
+      );
+    }
+    if (consentTiers.includeVitals) {
+      summaryLines.push(
+        `Key vitals: ${indicators.slice(0, 5).map(i => `${i.name}: ${i.value} ${i.unit}`).join('; ')}`
+      );
+    }
+    if (consentTiers.includeNotes) {
+      summaryLines.push(`Crew notes: ${packet.notes || 'None'}`);
+    }
+    summaryLines.push(
+      `Consent tiers authorized: ${Object.entries(consentTiers).filter(([, v]) => v).map(([k]) => k.replace('include', '')).join(', ')}`
+    );
+    const summaryText = summaryLines.join('\n');
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(summaryText);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = summaryText;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        const succeeded = document.execCommand('copy');
+        textArea.remove();
+        if (!succeeded) throw new Error('Clipboard copy unavailable');
+      }
+      setCopyError(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+      setCopyError(true);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+      {/* Offline Dashed Ribbon */}
+      {!isOnline && (
+        <div className="p-3.5 rounded-2xl border border-dashed border-[#FFB547]/60 bg-[#FFB547]/10 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 text-[#FFB547] font-medium">
+            <WifiOff className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>Queued, will send when linked — packet is saved safely on this device.</span>
+          </div>
+        </div>
+      )}
+
+      {/* One-Page Packet Preview */}
+      <article className="rounded-3xl cockpit-panel p-6 sm:p-8 space-y-6">
+        <header className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-5 border-b border-white/[0.08]">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-medium text-[#7FB2FF]">
+              <FileText className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>One-Page Flight Surgeon Summary</span>
+            </div>
+            <h1 className="mt-1.5 text-2xl font-semibold text-[#E8EEF7]">
+              {profile.name} · <span className="font-mono-tabular text-[#8A97AD]">{profile.crewId}</span>
+            </h1>
+            <p className="mt-1 text-xs text-[#8A97AD]">
+              {envCfg.label} ({envCfg.gravityLabel}) · Earth link: {envCfg.earthDelayText}
+            </p>
+          </div>
+
+          {/* Queue State Indicator */}
+          <div
+            className={cn(
+              'px-3.5 py-2 rounded-2xl border text-xs font-medium inline-flex items-center gap-2 self-start',
+              packet.status === 'delivered'
+                ? 'bg-[#3DE0C5]/12 border-[#3DE0C5]/40 text-[#3DE0C5]'
+                : packet.status === 'sending'
+                ? 'bg-[#6CB6FF]/12 border-[#6CB6FF]/40 text-[#6CB6FF]'
+                : packet.status === 'queued'
+                ? 'bg-[#FFB547]/12 border-dashed border-[#FFB547]/50 text-[#FFB547]'
+                : 'bg-[#070B14] border-white/12 text-[#8A97AD]'
+            )}
+          >
+            {packet.status === 'delivered' && <CheckCircle2 className="w-4 h-4" aria-hidden="true" />}
+            {packet.status === 'sending' && <Send className="w-4 h-4" aria-hidden="true" />}
+            {packet.status === 'queued' && <Clock className="w-4 h-4" aria-hidden="true" />}
+            <span>
+              {packet.status === 'idle'
+                ? 'Ready to queue'
+                : packet.status === 'queued'
+                ? 'Queued, will send when linked'
+                : packet.status === 'sending'
+                ? `Sending across ${envCfg.earthDelayText}…`
+                : `Delivered at ${packet.deliveredAt}`}
+            </span>
+          </div>
+        </header>
+
+        {/* Drifted Body Systems */}
+        <section>
+          <h2 className="text-sm font-semibold text-[#E8EEF7] mb-3">
+            Systems drifting from personal baseline ({driftedRegions.length})
+          </h2>
+          {driftedRegions.length === 0 ? (
+            <p className="text-xs text-[#3DE0C5] p-3 rounded-2xl bg-[#3DE0C5]/10 border border-[#3DE0C5]/25">
+              All 9 body regions are currently Nominal against baseline.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {driftedRegions.map((r) => (
+                <div
+                  key={r.id}
+                  className="p-3.5 rounded-2xl bg-[#070B14]/70 border border-white/[0.08] flex items-center justify-between gap-2"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-[#E8EEF7]">{r.name}</p>
+                    <p className="text-xs text-[#8A97AD] mt-0.5">
+                      {r.runwayDays ? `Runway ~${r.runwayDays} days` : 'Stable'}
+                    </p>
+                  </div>
+                  <StatusIndicator status={r.status} colorBlindSafe={colorBlindSafe} />
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Key Indicator Table */}
+        <section>
+          <h2 className="text-sm font-semibold text-[#E8EEF7] mb-3">
+            Key indicator readings vs personal baseline
+          </h2>
+          <div className="overflow-x-auto rounded-2xl border border-white/[0.08]">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#070B14]/80 text-[#8A97AD]">
+                <tr>
+                  <th className="py-2.5 px-3 font-medium">Indicator</th>
+                  <th className="py-2.5 px-3 font-medium">Current</th>
+                  <th className="py-2.5 px-3 font-medium">Baseline</th>
+                  <th className="py-2.5 px-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.06]">
+                {indicators.slice(0, 7).map((ind) => (
+                  <tr key={ind.id} className="bg-[#0E1522]/40">
+                    <td className="py-2.5 px-3 font-medium text-[#E8EEF7]">
+                      {ind.name}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono-tabular text-[#E8EEF7]">
+                      {ind.value} {ind.unit}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono-tabular text-[#8A97AD]">
+                      {ind.baseline} {ind.unit}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <StatusIndicator
+                        status={ind.status}
+                        colorBlindSafe={colorBlindSafe}
+                        compact
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* Crew Context Notes */}
+        <section>
+          <label htmlFor="surgeon-notes" className="block text-sm font-semibold text-[#E8EEF7] mb-2">
+            Symptoms or self-care already tried
+          </label>
+          <textarea
+            id="surgeon-notes"
+            rows={3}
+            value={packet.notes}
+            onChange={(e) => onUpdateNotes(e.target.value)}
+            placeholder="Describe what you feel, when it started, and any self-care steps taken..."
+            className="w-full px-3.5 py-2.5 rounded-2xl bg-[#070B14] border border-white/12 text-sm text-[#E8EEF7] placeholder:text-[#8A97AD]/50 focus:border-[#7FB2FF] focus:outline-none"
+          />
+        </section>
+
+        {/* Earth Transmission Consent Tiers */}
+        <section className="p-4 rounded-2xl bg-[#070B14]/70 border border-white/[0.08] space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[#E8EEF7]">
+              Transmission Consent Tiers
+            </h2>
+            <span className="text-[11px] text-[#7FB2FF] bg-[#7FB2FF]/10 px-2 py-0.5 rounded-full">
+              Crew Privacy Control
+            </span>
+          </div>
+          <p className="text-xs text-[#8A97AD]">
+            Choose exactly which data layers are packaged for Earth flight surgeons. Private crew notes and images are strictly opt-in.
+          </p>
+
+          {/* Quick Preset Buttons (Private / Trends / Full) */}
+          <div className="flex flex-wrap items-center gap-2 pt-1 pb-1">
+            <span className="text-xs text-[#8A97AD]">Tier Presets:</span>
+            <button
+              type="button"
+              onClick={() =>
+                setConsentTiers({
+                  includeDriftStatus: false,
+                  includeVitals: false,
+                  includeNotes: false,
+                  includeImagery: false,
+                })
+              }
+              className={cn(
+                'px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer',
+                !consentTiers.includeDriftStatus &&
+                  !consentTiers.includeVitals &&
+                  !consentTiers.includeNotes &&
+                  !consentTiers.includeImagery
+                  ? 'bg-[#7FB2FF] text-[#070B14] border-[#7FB2FF]'
+                  : 'bg-[#0E1522] text-[#8A97AD] border-white/10 hover:border-white/20'
+              )}
+            >
+              Private (Local only)
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setConsentTiers({
+                  includeDriftStatus: true,
+                  includeVitals: false,
+                  includeNotes: false,
+                  includeImagery: false,
+                })
+              }
+              className={cn(
+                'px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer',
+                consentTiers.includeDriftStatus &&
+                  !consentTiers.includeVitals &&
+                  !consentTiers.includeNotes &&
+                  !consentTiers.includeImagery
+                  ? 'bg-[#7FB2FF] text-[#070B14] border-[#7FB2FF]'
+                  : 'bg-[#0E1522] text-[#8A97AD] border-white/10 hover:border-white/20'
+              )}
+            >
+              Trends (Runway only)
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setConsentTiers({
+                  includeDriftStatus: true,
+                  includeVitals: true,
+                  includeNotes: true,
+                  includeImagery: true,
+                })
+              }
+              className={cn(
+                'px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer',
+                consentTiers.includeDriftStatus &&
+                  consentTiers.includeVitals &&
+                  consentTiers.includeNotes &&
+                  consentTiers.includeImagery
+                  ? 'bg-[#7FB2FF] text-[#070B14] border-[#7FB2FF]'
+                  : 'bg-[#0E1522] text-[#8A97AD] border-white/10 hover:border-white/20'
+              )}
+            >
+              Full (Clinical Telemetry)
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#0E1522]/60 border border-white/[0.06] cursor-pointer hover:border-white/20 transition-colors">
+              <input
+                type="checkbox"
+                checked={consentTiers.includeDriftStatus}
+                onChange={(e) =>
+                  setConsentTiers((prev) => ({ ...prev, includeDriftStatus: e.target.checked }))
+                }
+                className="mt-0.5 rounded border-white/20 text-[#7FB2FF] focus:ring-0"
+              />
+              <div className="text-xs">
+                <span className="font-medium text-[#E8EEF7] block">Tier 1: System Drift & Runway</span>
+                <span className="text-[#8A97AD] text-[11px]">Anatomical region statuses and runway projections</span>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#0E1522]/60 border border-white/[0.06] cursor-pointer hover:border-white/20 transition-colors">
+              <input
+                type="checkbox"
+                checked={consentTiers.includeVitals}
+                onChange={(e) =>
+                  setConsentTiers((prev) => ({ ...prev, includeVitals: e.target.checked }))
+                }
+                className="mt-0.5 rounded border-white/20 text-[#7FB2FF] focus:ring-0"
+              />
+              <div className="text-xs">
+                <span className="font-medium text-[#E8EEF7] block">Tier 2: Discrete Vitals</span>
+                <span className="text-[#8A97AD] text-[11px]">Heart rate, BP, sleep, and core indicators</span>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#0E1522]/60 border border-white/[0.06] cursor-pointer hover:border-white/20 transition-colors">
+              <input
+                type="checkbox"
+                checked={consentTiers.includeNotes}
+                onChange={(e) =>
+                  setConsentTiers((prev) => ({ ...prev, includeNotes: e.target.checked }))
+                }
+                className="mt-0.5 rounded border-white/20 text-[#7FB2FF] focus:ring-0"
+              />
+              <div className="text-xs">
+                <span className="font-medium text-[#E8EEF7] block">Tier 3: Crew Subjective Notes</span>
+                <span className="text-[#8A97AD] text-[11px]">Self-reported symptoms and context text</span>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#0E1522]/60 border border-white/[0.06] cursor-pointer hover:border-white/20 transition-colors">
+              <input
+                type="checkbox"
+                checked={consentTiers.includeImagery}
+                onChange={(e) =>
+                  setConsentTiers((prev) => ({ ...prev, includeImagery: e.target.checked }))
+                }
+                className="mt-0.5 rounded border-white/20 text-[#7FB2FF] focus:ring-0"
+              />
+              <div className="text-xs">
+                <span className="font-medium text-[#E8EEF7] block">Tier 4: Captured Photos / Ultrasound</span>
+                <span className="text-[#8A97AD] text-[11px]">Visual inspection files and sensor attachments</span>
+              </div>
+            </label>
+          </div>
+        </section>
+
+        {/* Send / Copy Footer */}
+        <footer className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-white/[0.08]">
+          <p className="text-[11px] text-[#8A97AD]">
+            Synthetic data, self-assessment support, not clinical.
+          </p>
+
+          <div className="flex items-center gap-2.5">
+            <Button type="button" variant="secondary" onClick={handleCopyText}>
+              {copied ? 'Copied summary' : copyError ? 'Copy unavailable' : 'Copy plain text'}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={onQueuePacket}
+              disabled={packet.status === 'sending'}
+            >
+              <Send className="w-4 h-4" aria-hidden="true" />
+              <span>
+                {!isOnline
+                  ? 'Queue offline packet'
+                  : packet.status === 'delivered'
+                  ? 'Resend packet'
+                  : 'Send to Flight Surgeon'}
+              </span>
+            </Button>
+          </div>
+        </footer>
+      </article>
+    </div>
+  );
+};

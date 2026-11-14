@@ -1,0 +1,145 @@
+@import "tailwindcss";
+
+:root {
+  --helix-ink: #070B14;
+  --helix-surface-1: #0E1522;
+  --helix-surface-2: #151E2E;
+  --helix-hairline: rgba(255, 255, 255, 0.08);
+  --helix-highlight: rgba(255, 255, 255, 0.04);
+  --helix-text: #E8EEF7;
+  --helix-muted: #8A97AD;
+  --helix-accent: #7FB2FF;
+
+  --status-nominal: #3DE0C5;
+  --status-watch: #6CB6FF;
+  --status-caution: #FFB547;
+  --status-escalate: #FF6B5E;
+
+  --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+html {
+  background-color: var(--helix-ink);
+  color: var(--helix-text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background-color: var(--helix-ink);
+  color: var(--helix-text);
+  overflow-x: hidden;
+  line-height: 1.55;
+}
+
+/* Accessibility modes */
+html.helix-large-text {
+  font-size: 18px;
+}
+
+html.helix-high-contrast {
+  --helix-ink: #04070D;
+  --helix-surface-1: #0B1220;
+  --helix-surface-2: #141F35;
+  --helix-hairline: rgba(255, 255, 255, 0.28);
+  --helix-highlight: rgba(255, 255, 255, 0.12);
+  --helix-text: #FFFFFF;
+  --helix-muted: #C2CEE0;
+  --helix-accent: #9EC5FF;
+}
+
+html.helix-colorblind-safe {
+  --status-nominal: #009E73;
+  --status-watch: #56B4E9;
+  --status-caution: #E69F00;
+  --status-escalate: #D55E00;
+}
+
+.font-mono-tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Calm Cockpit surface card */
+.cockpit-panel {
+  background-color: var(--helix-surface-1);
+  border: 1px solid var(--helix-hairline);
+  box-shadow: inset 0 1px 0 0 var(--helix-highlight), 0 16px 40px -16px rgba(0, 0, 0, 0.65);
+}
+
+.cockpit-panel-elevated {
+  background-color: rgba(21, 30, 46, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--helix-hairline);
+  box-shadow: inset 0 1px 0 0 var(--helix-highlight), 0 24px 48px -12px rgba(0, 0, 0, 0.72);
+}
+
+/* Single pulse on shortest runway on initial load - never loops */
+@keyframes singleCalmPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 181, 71, 0.45);
+  }
+  55% {
+    box-shadow: 0 0 0 8px rgba(255, 181, 71, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 181, 71, 0);
+  }
+}
+
+.animate-single-pulse {
+  animation: singleCalmPulse 1.6s cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-single-pulse {
+    animation: none !important;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+html.helix-reduced-motion *,
+html.helix-reduced-motion *::before,
+html.helix-reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Clean subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* Accessible focus ring */
+:focus-visible {
+  outline: 2px solid var(--helix-accent);
+  outline-offset: 2px;
+}
