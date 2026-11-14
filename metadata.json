@@ -1,0 +1,6 @@
+{
+  "name": "HELIX",
+  "description": "Your body's flight computer — astronaut self-assessment and physiological mission instrumentation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
