@@ -269,12 +269,10 @@ export function IndicatorTrendChart({
 export function RunwayProjectionChart({
   currentDays,
   projectedDays,
-  thresholdDays,
   regionName,
 }: {
   currentDays: number;
   projectedDays: number;
-  thresholdDays: number;
   regionName: string;
 }) {
   const width = 380;
@@ -298,7 +296,7 @@ export function RunwayProjectionChart({
       viewBox={`0 0 ${width} ${height}`}
       className="w-full h-auto"
       role="img"
-      aria-label={`Runway projection chart for ${regionName} showing current crossing at day ${currentDays} and projected crossing at day ${projectedDays}`}
+      aria-label={`Synthetic runway illustration for ${regionName}: current estimate day ${currentDays}; scenario estimate day ${projectedDays}`}
     >
       {/* Safe vs Caution zone */}
       <rect
@@ -325,7 +323,7 @@ export function RunwayProjectionChart({
         fontSize="9.5"
         fontFamily="JetBrains Mono, monospace"
       >
-        Action threshold (Day {thresholdDays} buffer)
+        Demo marker (not a clinical threshold)
       </text>
 
       {/* Current trend line */}

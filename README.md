@@ -1,62 +1,120 @@
-# HELIX - Your body's flight computer
+# HELIX — Your Body's Flight Computer
 
-HELIX is an offline-first astronaut self-assessment demo. It combines a React cockpit and interactive body twin with guided measurements, plain-language explanations, synthetic mission trends, and a locally prepared flight-surgeon summary. The Express app serves the frontend and optional Auth.js routes; a FastAPI service supplies the synthetic simulator and demo sync endpoints.
+> **NASA Space Apps Challenge 2026**  
+> **Challenge:** Create Health Monitoring Software for Astronauts on Space Missions  
+> **Category:** Human Exploration / Space Exploration / Software  
 
-**This is a prototype, not clinical software.** All sample profiles, readings, statuses, and runway estimates are synthetic. The app does not diagnose, prescribe treatment, or implement mission medical thresholds. Follow approved mission procedures for health concerns.
+HELIX is an offline-first astronaut self-assessment and physiological health-monitoring platform designed for long-duration spaceflight (deep-space transit, orbital stations, lunar outposts, and Mars exploration). Grounded in the **NASA Human Research Program (HRP)**, HELIX provides crew members with an intuitive, non-alarmist flight deck to track personal baseline drift, estimate health runway, and take targeted daily countermeasures—even during prolonged communication delays with Earth.
 
-## What is implemented
+> [!IMPORTANT]
+> **Prototype & Synthetic Data Notice:**  
+> All astronaut profiles, physiological telemetry, trend projections, and runway estimates in this application are **synthetic demo data**. HELIX provides self-monitoring and early mission alerts only; it **does not diagnose, prescribe treatment, or replace certified clinical medical devices**. Astronauts must follow official mission medical standards and contact the flight surgeon for concerning symptoms.
 
-- Clickable 3D anatomy view with a 2D fallback, body-region details, hazard context, and baseline comparisons.
-- Guided self-checks, measurement entry, learning/glossary content, and a single explainable daily action.
-- Synthetic mission profiles, stressor scenarios, trend charts, and illustrative runway estimates.
-- Local-first state and offline queue using IndexedDB with localStorage fallback; a service worker caches the app shell.
-- Optional Crew ID authentication, Google OAuth configuration, and authenticated demo measurement/summary sync.
-- FastAPI endpoints for indicator definitions, synthetic streams and assessments, and explicitly submitted demo records.
+---
 
-See [DELIVERABLES.md](DELIVERABLES.md) for the architecture, indicator/risk mapping, demo script, challenge coverage, and limitations.
+## Key Features
 
-## Run locally
+- **3D Ghost Twin & 2D Fallback:**  
+  Interactive 3D body model (`Three.js` / `@react-three/fiber`) with 4 toggleable layers (**Skeleton**, **Organs**, **Muscles**, **Suit**). Features an **Earth Baseline Ghost**—a translucent wireframe juxtaposed behind the active model to visualize microgravity cephalic fluid shift and physical deconditioning. Includes an automatic SVG-based 2D fallback for devices without WebGL or when reduced motion is preferred.
+- **Health Runway & What-If Simulator:**  
+  A predictive gauge computing days remaining until a drifting metric reaches an attention threshold, ordered shortest runway first. Includes an interactive **What-If Simulator** allowing astronauts to preview the runway impact of countermeasures (Sleep +90m, ARED exercise boost, lighter workload, hydration/nutrition, circadian light shift).
+- **One Thing Today:**  
+  Synthesizes complex physiological signals into a single, high-priority daily action card with NASA HRP evidence tagging (`Recommended` vs. `Under study`), clear rationale, and backup interventions to combat cognitive fatigue.
+- **Flight School Onboarding:**  
+  A 7-step interactive spotlight walkthrough introducing twin navigation, hotspot tapping, color/glyph keys, reading the runway, One Thing Today, hazard lenses, and logging a live self-check. Unlocks the "Cleared for Flight" badge.
+- **90-Second Demo Mode & Hazard Injection:**  
+  Interactive timeline scrubber with live stressor injectors: *Solar flare / Radiation event*, *Cabin CO₂ drift*, *Sleep loss & isolation*, and *EVA physical strain*.
+- **Crew Baselines & Peer Buddy Check-in:**  
+  Interactive comparative slider demonstrating why population averages fail in space (e.g., an identical 68 bpm resting heart rate is Nominal for one astronaut but Caution for another). Features discreet peer buddy check-in prompts (shared galley meal, EVA cross-checking, cupola rest, sleep check-in) that reward the crew by updating their **Connect** ring (+25%).
+- **Flight Surgeon Summary Packet:**  
+  A one-page delay-aware clinical summary packet with **Transmission Consent Tiers** (`Private`, `Trends`, `Full`), crew notes, transmission state indicators (`idle`, `queued`, `sending`, `delivered`), and one-click plaintext copying.
+- **100% Offline-First Architecture:**  
+  All core assessments, twin rendering, runway forecasting, Flight School tutorials, and medical emergency checklists function completely offline. State is cached in **IndexedDB** (`helix-local-v1`) with `localStorage` fallback, assets are cached via a PWA service worker, credentials can be unlocked offline via WebCrypto PBKDF2, and pending operations automatically sync when reconnected.
 
-Prerequisites: Node.js with npm and Python 3.10+.
+---
 
-1. Start the API in a terminal:
+## Tech Stack
 
-   ```powershell
-   cd backend
-   python -m venv .venv
-   .venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
-   $env:HELIX_SECRET = "replace-with-a-long-random-secret"
-   uvicorn app.main:app --reload --port 8000
-   ```
+- **Frontend:** React 19, Vite, TypeScript, Express 4, Tailwind CSS v4, Three.js / `@react-three/fiber` / `@react-three/drei`, Motion (`motion/react`), Lucide React.
+- **Backend:** Python FastAPI, SQLite (`helix.sqlite3`), Pydantic v2, Uvicorn.
+- **Authentication:** Auth.js (`@auth/express`) with Credentials provider and optional Google OAuth 2.0.
+- **Local Storage:** IndexedDB (`idb` wrapper) + `localStorage` + WebCrypto PBKDF2 offline auth hashing.
 
-2. In another terminal, start the web app:
+---
 
-   ```powershell
-   cd frontend
-   Copy-Item .env.example .env
-   # Set AUTH_SECRET to a unique random value before sharing the app.
-   npm install
-   npm run dev
-   ```
+## Run Locally
 
-3. Open http://localhost:3000. The development demo account is Crew ID `commander`, password `commander-demo`. Guest mode keeps a local-only profile. See [frontend/README.md](frontend/README.md) for authentication and offline details and [backend/README.md](backend/README.md) for API configuration.
+### Prerequisites
+- **Node.js** (v18+ or v20+) with `npm`
+- **Python** (v3.10+)
 
-The cockpit can fall back to local synthetic fixtures when the API is unavailable. Google sign-in requires OAuth credentials; the demo Crew ID flow does not.
+### 1. Start the FastAPI Mission Backend
+Open a terminal and start the Python API service:
 
-## Development commands
-
-Run from `frontend/`:
-
-```sh
-npm run dev      # Express host and Vite middleware at http://localhost:3000
-npm run build    # Production frontend bundle
-npm run start    # Express host serving the production bundle
-npm run lint     # TypeScript type check
+```powershell
+cd backend
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+$env:HELIX_SECRET = "replace-with-a-long-random-secret"
+uvicorn app.main:app --reload --port 8000
 ```
 
-Run the backend from `backend/` with `uvicorn app.main:app --reload --port 8000`. Interactive API docs are at http://localhost:8000/docs.
+- API Base URL: `http://127.0.0.1:8000`
+- Interactive OpenAPI / Swagger Docs: `http://127.0.0.1:8000/docs`
 
-## Data and privacy
+### 2. Start the Frontend Cockpit
+Open a second terminal, configure environment variables, and start the Express + Vite server:
 
-Core screens use browser-local state. Signing in enables optional demo synchronization; submitted measurements and summary packets are stored in the backend's SQLite database. This demo service is not connected to NASA or an actual flight surgeon. Configure unique secrets and secure deployment settings before exposing it beyond local development.
+```powershell
+cd frontend
+Copy-Item .env.example .env
+npm install
+npm run dev
+```
+
+- Cockpit Application: `http://localhost:3000`
+
+### 3. Demo Credentials
+On the sign-in screen, sign in with the seeded development demo account:
+- **Crew ID:** `commander`
+- **Password:** `commander-demo`
+- **Guest Mode:** Click **Continue as guest** for an instant local-only profile without backend authentication.
+
+> [!NOTE]
+> The first successful online sign-in caches a salted PBKDF2 hash on the device, allowing that Crew ID profile to be unlocked even when offline.
+
+---
+
+## Auth.js & Optional Google OAuth
+
+Auth.js runs via the Express host using the Credentials provider to authenticate against FastAPI. Set `AUTH_SECRET` and `AUTH_URL` in `.env`.
+
+To enable optional Google OAuth sign-in:
+1. In Google Cloud Console, create an OAuth 2.0 Client ID for a **Web application**.
+2. Add `http://localhost:3000/auth/callback/google` to the **Authorized redirect URIs**.
+3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`. The Google button automatically appears once configured.
+
+---
+
+## Development Scripts
+
+Run from the `frontend/` directory:
+
+| Command | Description |
+| :--- | :--- |
+| `npm run dev` | Starts Express server with embedded Vite middleware on `http://localhost:3000` |
+| `npm run build` | Compiles production client bundle to `dist/` |
+| `npm run start` | Runs Express server in production mode serving static `dist/` assets |
+| `npm run lint` | Runs TypeScript type checking (`tsc --noEmit`) |
+
+To verify backend endpoints, run from `backend/`:
+```powershell
+python test_api.py
+```
+
+---
+
+## Data Privacy & Offline Sync
+
+All astronaut self-check readings, private context notes, and active adjustments are stored locally on the client device. Explicitly submitted measurements and flight surgeon packets are queued in IndexedDB when offline and synchronized to the backend service over authenticated channels when connectivity resumes. This demo does not transmit data to external servers or real flight surgeons.

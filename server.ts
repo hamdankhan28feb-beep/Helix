@@ -1,7 +1,11 @@
+import 'dotenv/config';
 import express from 'express';
+import { ExpressAuth, getSession } from '@auth/express';
+import type { Request } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
+import { apiTokens, authConfig } from './auth';
 import {
   CREW_FIXTURE,
   HAZARDS_FIXTURE,
@@ -18,8 +22,20 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   app.use(express.json());
+  app.use('/auth', ExpressAuth(authConfig));
 
   const PORT = 3000;
+  const backendUrl = process.env.HELIX_API_URL || 'http://127.0.0.1:8000';
+
+  async function backendFetch(req: Request, route: string, init: RequestInit = {}) {
+    const session = await getSession(req, authConfig).catch(() => null);
+    const crewId = (session as (typeof session & { crewId?: string }) | null)?.crewId;
+    const apiAccessToken = crewId ? apiTokens.get(crewId) : undefined;
+    const headers = new Headers(init.headers);
+    if (apiAccessToken) headers.set('Authorization', `Bearer ${apiAccessToken}`);
+    if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    return fetch(`${backendUrl}${route}`, { ...init, headers });
+  }
 
   // In-memory session state mirrored from NASA HRP-grounded fixtures
   const state = {
@@ -36,8 +52,44 @@ async function startServer() {
 
   app.get('/api/auth/config', (_req, res) => {
     res.json({
-      googleConfigured: Boolean(process.env.GOOGLE_CLIENT_ID),
+      googleConfigured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.AUTH_SECRET),
     });
+  });
+
+  app.get('/api/auth/session', async (req, res) => {
+    const session = await getSession(req, authConfig).catch(() => null);
+    res.json(session || null);
+  });
+
+  app.get('/api/demo/dashboard', async (req, res) => {
+    const profileId = String(req.query.profile || 'commander');
+    const day = Number(req.query.day || 63);
+    const stressors = Array.isArray(req.query.stressor)
+      ? req.query.stressor.map(String)
+      : req.query.stressor ? [String(req.query.stressor)] : [];
+    try {
+      const query = new URLSearchParams({ day: String(day) });
+      stressors.forEach((value) => query.append('stressor', value));
+      const response = await backendFetch(req, `/assessment/${encodeURIComponent(profileId)}?${query}`);
+      if (!response.ok) throw new Error(`Backend returned ${response.status}`);
+      const assessment = await response.json() as any;
+      assessment.stressors = stressors;
+      const streamResponse = await backendFetch(req, `/stream/${encodeURIComponent(profileId)}?${query}`);
+      const stream = streamResponse.ok ? await streamResponse.json() as any : null;
+      res.json({ assessment, stream });
+    } catch {
+      res.status(503).json({ error: 'Mission backend unavailable; use the local synthetic fixtures.' });
+    }
+  });
+
+  app.get('/api/demo/packet/:profileId', async (req, res) => {
+    try {
+      const query = new URLSearchParams({ day: String(req.query.day || 63) });
+      const response = await backendFetch(req, `/packet/${encodeURIComponent(req.params.profileId)}?${query}`);
+      res.status(response.status).json(await response.json());
+    } catch {
+      res.status(503).json({ error: 'Mission backend unavailable; packet remains stored on this device.' });
+    }
   });
 
   app.get(['/api/twin', '/twin'], (_req, res) => {
@@ -60,51 +112,29 @@ async function startServer() {
     res.json(state.oneThing);
   });
 
-  app.post(['/api/measure', '/measure'], (req, res) => {
+  app.post(['/api/measure', '/measure'], async (req, res) => {
     const { indicatorId, value } = req.body as {
       indicatorId: string;
       value: number;
     };
 
     const indicator = state.indicators.find((i) => i.id === indicatorId);
-    let newStatus: StatusLevel = 'nominal';
-    let feedback: 'Looks normal' | 'Recheck in 10 min' | 'Contact flight surgeon' =
-      'Looks normal';
-
+    const newStatus: StatusLevel = indicator?.status || 'nominal';
+    const feedback = 'Recorded for review';
     if (indicator && typeof value === 'number' && !Number.isNaN(value)) {
-      indicator.value = value;
-      const { min, max } = indicator.referenceRange;
-      const span = Math.max(0.5, max - min);
-
-      if (value < min - span * 0.45 || value > max + span * 0.55) {
-        newStatus = 'escalate';
-        feedback = 'Contact flight surgeon';
-      } else if (value < min || value > max) {
-        newStatus = 'caution';
-        feedback = 'Recheck in 10 min';
-      } else if (Math.abs(value - indicator.baseline) > span * 0.35) {
-        newStatus = 'watch';
-        feedback = 'Looks normal';
+      const response = await backendFetch(req, '/measurements', {
+        method: 'POST',
+        body: JSON.stringify({ indicator_id: indicatorId, value: String(value), unit: indicator.unit }),
+      }).catch(() => null);
+      if (!response?.ok) {
+        res.status(503).json({ error: 'Measurement remains local; demo sync service is unavailable.' });
+        return;
       }
-
-      indicator.status = newStatus;
+      indicator.value = value;
       indicator.series = [
         ...indicator.series.slice(0, -1),
         { day: 'Today', value },
       ];
-
-      const region = state.regions.find((r) => r.id === indicator.regionId);
-      if (region) {
-        region.status = newStatus;
-        region.runwayDays =
-          newStatus === 'nominal'
-            ? null
-            : newStatus === 'watch'
-            ? 16
-            : newStatus === 'caution'
-            ? 8
-            : 3;
-      }
     }
 
     res.json({
@@ -124,17 +154,17 @@ async function startServer() {
     });
   });
 
-  app.post(['/api/packet', '/packet'], (req, res) => {
+  app.post(['/api/packet', '/packet'], async (req, res) => {
     const body = req.body as { id?: string; notes?: string };
-    res.json({
-      id: body.id || `PKT-${Date.now()}`,
-      status: 'sending',
-      queuedAt: new Date().toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-      notes: body.notes || '',
-    });
+    const generated = await backendFetch(req, '/packet/commander?day=63', {
+      method: 'POST', body: JSON.stringify({ id: body.id, notes: body.notes || '' }),
+    }).catch(() => null);
+    if (!generated?.ok) {
+      res.status(503).json({ error: 'Packet is still stored locally; demo sync service is unavailable.' });
+      return;
+    }
+    const packet = generated?.ok ? await generated.json().catch(() => null) : null;
+    res.json({ id: packet?.id || body.id || `PKT-${Date.now()}`, status: 'queued', queuedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), notes: body.notes || '', synthetic: Boolean(packet?.synthetic), disclaimer: packet?.disclaimer, syncNotice: 'Stored in the demo sync service; not transmitted to NASA or a flight surgeon.' });
   });
 
   app.get(['/api/stream', '/stream'], (req, res) => {

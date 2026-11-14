@@ -29,28 +29,28 @@ const SLIDER_CONTROLS: Array<{
 }> = [
   {
     key: 'sleepPlus90',
-    label: 'Sleep +90 minutes tonight',
-    effect: 'Lengthens Mind & Sleep (+6d), Heart (+3d), Brain (+2d)',
+    label: 'Illustrative longer sleep opportunity',
+    effect: 'Illustrative sleep-schedule scenario for Mind & Sleep, Heart, and Brain & Eyes',
   },
   {
     key: 'exerciseBoost',
-    label: 'Complete ARED + cycle block',
-    effect: 'Lengthens Bones & Muscles (+8d), Heart (+4d)',
+    label: 'Follow the planned mission exercise session',
+    effect: 'Illustrative exercise scenario for Bones & Muscles and Heart',
   },
   {
     key: 'lighterWorkload',
     label: 'Lighter afternoon workload',
-    effect: 'Lengthens Mind & Sleep (+4d), Immune (+2d)',
+    effect: 'Illustrative workload scenario for Mind & Sleep and Immune & Skin',
   },
   {
     key: 'hydrationNutrition',
-    label: '+500 ml electrolyte + fiber meal',
-    effect: 'Lengthens Gut (+5d), Heart (+3d), Balance (+2d)',
+    label: 'Follow the mission hydration and nutrition plan',
+    effect: 'Illustrative nutrition scenario for Gut, Heart, and Balance',
   },
   {
     key: 'lightShift',
-    label: 'Morning bright-light schedule anchor',
-    effect: 'Lengthens Mind & Sleep (+5d), Brain & Eyes (+2d)',
+    label: 'Follow the mission light-dark schedule',
+    effect: 'Illustrative light schedule scenario for Mind & Sleep and Brain & Eyes',
   },
 ];
 
@@ -181,14 +181,14 @@ export const WhyAndWhatIfModal: React.FC<WhyAndWhatIfModalProps> = ({
             {/* Crossing Point Chart */}
             <div className="p-4 rounded-2xl bg-[#070B14]/70 border border-white/[0.08]">
               <h3 className="text-xs font-semibold text-[#E8EEF7] mb-2">
-                Trend, threshold & crossing point
+                Illustrative trend projection
               </h3>
               <RunwayProjectionChart
                 currentDays={baseDays}
                 projectedDays={projectedDays}
-                thresholdDays={activeRunway.thresholdDays}
                 regionName={activeRunway.regionName}
               />
+              <p className="mt-2 text-[11px] text-[#8A97AD]">Illustrative scenario math on synthetic data; not a medical forecast.</p>
             </div>
 
             <div className="flex justify-end">
@@ -208,7 +208,7 @@ export const WhyAndWhatIfModal: React.FC<WhyAndWhatIfModalProps> = ({
                   What-if recovery simulator
                 </h2>
                 <p className="mt-1 text-xs text-[#8A97AD]">
-                  Toggle countermeasures to see how your runway bars lengthen before applying them.
+                  Toggle illustrative scenarios to see how the synthetic runway display changes.
                 </p>
               </div>
               <button

@@ -56,7 +56,7 @@ export const STATUS_TOKENS: Record<
     borderClass: 'border-[#FF6B5E]/45',
     shape: 'octagon',
     glyph: '⬢',
-    description: 'Crossed threshold. Retest and prepare flight surgeon summary.',
+    description: 'Needs crew attention. Follow mission procedure and prepare a flight surgeon summary.',
   },
 };
 
