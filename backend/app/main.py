@@ -7,6 +7,7 @@ import os
 import secrets
 import sqlite3
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -19,14 +20,8 @@ BASE = Path(__file__).parent
 DB_PATH = Path(os.getenv("HELIX_DB_PATH", str(BASE.parent / "helix.sqlite3")))
 SECRET = os.getenv("HELIX_SECRET", "development-only-change-me")
 TOKEN_TTL = 60 * 60 * 12
-app = FastAPI(title="HELIX Mission Health API", version="0.1.0", description="Optional Earth sync and synthetic demo stream. Not clinical software.")
-origins = [x.strip() for x in os.getenv("HELIX_CORS_ORIGINS", "http://localhost:3000").split(",") if x.strip()]
-app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["GET", "POST"], allow_headers=["Authorization", "Content-Type"])
 
-def connect() -> sqlite3.Connection:
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
-    return con
+_initialized = False
 
 def hash_password(password: str, salt: bytes | None = None) -> str:
     salt = salt or secrets.token_bytes(16)
@@ -41,6 +36,46 @@ def check_password(password: str, stored: str) -> bool:
         return hmac.compare_digest(actual, digest)
     except (ValueError, TypeError):
         return False
+
+def initialize() -> None:
+    global _initialized
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(DB_PATH)
+    try:
+        con.execute("CREATE TABLE IF NOT EXISTS crew (crew_id TEXT PRIMARY KEY, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)")
+        con.execute("CREATE TABLE IF NOT EXISTS measurements (id INTEGER PRIMARY KEY, crew_id TEXT NOT NULL, indicator_id TEXT NOT NULL, value TEXT NOT NULL, unit TEXT NOT NULL, recorded_at TEXT NOT NULL)")
+        con.execute("CREATE TABLE IF NOT EXISTS summary_packets (packet_id TEXT PRIMARY KEY, crew_id TEXT NOT NULL, notes TEXT NOT NULL, packet_json TEXT NOT NULL, recorded_at TEXT NOT NULL)")
+        con.commit()
+        cur = con.cursor()
+        cur.execute("SELECT 1 FROM crew WHERE crew_id='commander'")
+        if not cur.fetchone():
+            password = os.getenv("HELIX_DEMO_PASSWORD", "commander-demo")
+            cur.execute("INSERT INTO crew VALUES(?,?,?)", ("commander", hash_password(password), datetime.now(timezone.utc).isoformat()))
+            con.commit()
+        _initialized = True
+    finally:
+        con.close()
+
+def connect() -> sqlite3.Connection:
+    if not _initialized:
+        initialize()
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    initialize()
+    yield
+
+app = FastAPI(
+    title="HELIX Mission Health API",
+    version="0.1.0",
+    description="Optional Earth sync and synthetic demo stream. Not clinical software.",
+    lifespan=lifespan
+)
+origins = [x.strip() for x in os.getenv("HELIX_CORS_ORIGINS", "http://localhost:3000").split(",") if x.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["GET", "POST"], allow_headers=["Authorization", "Content-Type"])
 
 def b64(data: bytes) -> str:
     import base64
@@ -64,16 +99,6 @@ def decode_token(token: str) -> str:
     except Exception as exc:
         raise HTTPException(401, "Invalid or expired session") from exc
 
-@app.on_event("startup")
-def initialize() -> None:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with connect() as con:
-        con.execute("CREATE TABLE IF NOT EXISTS crew (crew_id TEXT PRIMARY KEY, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)")
-        con.execute("CREATE TABLE IF NOT EXISTS measurements (id INTEGER PRIMARY KEY, crew_id TEXT NOT NULL, indicator_id TEXT NOT NULL, value TEXT NOT NULL, unit TEXT NOT NULL, recorded_at TEXT NOT NULL)")
-        con.execute("CREATE TABLE IF NOT EXISTS summary_packets (packet_id TEXT PRIMARY KEY, crew_id TEXT NOT NULL, notes TEXT NOT NULL, packet_json TEXT NOT NULL, recorded_at TEXT NOT NULL)")
-        if not con.execute("SELECT 1 FROM crew WHERE crew_id='commander'").fetchone():
-            password = os.getenv("HELIX_DEMO_PASSWORD", "commander-demo")
-            con.execute("INSERT INTO crew VALUES(?,?,?)", ("commander", hash_password(password), datetime.now(timezone.utc).isoformat()))
 
 def current_user(authorization: str | None = Header(default=None)) -> str:
     if not authorization or not authorization.startswith("Bearer "):

@@ -4,12 +4,16 @@
 
 Scores are 1–5 (5 is best).
 
-| Concept | Novelty | Feasibility | Judge impact | Challenge fit |
-|---|---:|---:|---:|---:|
-| **HELIX: Your body's flight computer** — a Ghost Twin, explainable Health Runway, and one action for today | 5 | 4 | 5 | 5 |
-| Mission Health Dashboard — a conventional vitals-and-alerts dashboard | 2 | 5 | 3 | 4 |
+| Concept | Novelty | Feasibility | Judge impact | Challenge fit | Total |
+|---|---:|---:|---:|---:|---:|
+| **HELIX: Your body's flight computer** — a 3D Ghost Twin, explainable Health Runway, and One Thing Today | 5 | 4 | 5 | 5 | **19/20** |
+| **Alternative 1: Mission Health Dashboard** — conventional telemetry vitals-and-alerts dashboard with status tables | 2 | 5 | 3 | 4 | 14/20 |
+| **Alternative 2: Earth-Tethered Telemedicine Portal** — continuous cloud sync with asynchronous doctor chat and remote EHR | 1 | 3 | 2 | 2 | 8/20 |
 
-HELIX is the selected concept: a visual, novice-first interface for self-assessment during long missions, with conservative guidance and an honest synthetic-data story.
+**Concept trade-off analysis:**
+- *Alternative 1 (Mission Health Dashboard)* is easy to build but lacks intuitive visual spatialization for non-physicians. It floods the astronaut with raw clinical numbers without answering the core questions: "Where am I drifting compared to my Earth baseline?", "How long before it needs intervention?", and "What single action should I take right now?"
+- *Alternative 2 (Earth-Tethered Telemedicine Portal)* violates the deep-space communication reality of Mars/Artemis missions, where communication delay ranges up to 22 minutes one-way and comms blackouts are frequent. A tool that assumes real-time or near-real-time clinician intervention fails the core challenge requirement of astronaut *self-assessment*.
+- **Selected Concept (HELIX)** was chosen because it directly addresses the 5 NASA hazards and 17 risks through a visual 3D Ghost Twin, provides transparent trend projections (Health Runway) rather than black-box diagnostic claims, and prioritizes a single actionable countermeasure (One Thing Today) while functioning 100% offline.
 
 ## 2. Pitch, users, and Earth benefits
 

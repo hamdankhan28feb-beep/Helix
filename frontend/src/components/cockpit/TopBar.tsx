@@ -380,6 +380,20 @@ export const TopBar: React.FC<TopBarProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Compounding Hazards Notice Ribbon */}
+        {activeHazards.length >= 2 && combinedRisk.compoundingNote && (
+          <div className="border-t border-[#FFB547]/20 bg-[#FFB547]/[0.06] px-4 sm:px-6 py-1.5 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 text-[#E8EEF7]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#FFB547] animate-pulse" />
+              <span className="font-medium text-[#FFB547]">Compounding Hazard Effect:</span>
+              <span className="text-[#8A97AD]">{combinedRisk.compoundingNote}</span>
+            </div>
+            <span className="text-[10px] text-[#8A97AD] font-mono-tabular shrink-0 hidden sm:inline">
+              Multi-hazard interaction
+            </span>
+          </div>
+        )}
       </div>
     </header>
   );

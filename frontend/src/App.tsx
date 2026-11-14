@@ -429,6 +429,18 @@ export default function App() {
     showToast('Action logged. Your Rest ring updated gently.');
   };
 
+  const handleIncrementRing = (key: 'move' | 'rest' | 'connect') => {
+    setRings((prev) => {
+      const nextVal = Math.min(1, Number((prev[key] + 0.25).toFixed(2)));
+      const next = { ...prev, [key]: nextVal };
+      saveLocalState('rings', next);
+      if (nextVal >= 1 && prev[key] < 1) {
+        showToast(`${key.charAt(0).toUpperCase() + key.slice(1)} ring complete.`);
+      }
+      return next;
+    });
+  };
+
   const handleQueuePacket = async () => {
     const updated = await queueSurgeonPacket(packet, isOnline);
     setPacket(updated);
@@ -741,7 +753,11 @@ export default function App() {
         )}
 
         {homeTab === 'crew' && (
-          <CrewScreen crew={crew} colorBlindSafe={settings.colorBlindSafe} />
+          <CrewScreen
+            crew={crew}
+            colorBlindSafe={settings.colorBlindSafe}
+            onBuddyCheckIn={() => handleIncrementRing('connect')}
+          />
         )}
 
         {homeTab === 'summary' && (
@@ -771,17 +787,7 @@ export default function App() {
           setWizardOpen(true);
         }}
         onOpenSurgeonGuide={() => setHomeTab('summary')}
-        onIncrementRing={(key) => {
-          setRings((prev) => {
-            const nextVal = Math.min(1, Number((prev[key] + 0.25).toFixed(2)));
-            const next = { ...prev, [key]: nextVal };
-            saveLocalState('rings', next);
-            if (nextVal >= 1 && prev[key] < 1) {
-              showToast(`${key.charAt(0).toUpperCase() + key.slice(1)} ring complete.`);
-            }
-            return next;
-          });
-        }}
+        onIncrementRing={handleIncrementRing}
       />
 
       {/* Interactive Overlays & Drawers */}

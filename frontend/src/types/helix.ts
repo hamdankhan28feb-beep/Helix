@@ -185,12 +185,20 @@ export interface HealthRingsState {
   }>;
 }
 
+export interface ConsentTiers {
+  includeVitals: boolean;
+  includeDriftStatus: boolean;
+  includeNotes: boolean;
+  includeImagery: boolean;
+}
+
 export interface PacketState {
   id: string;
   status: 'idle' | 'queued' | 'sending' | 'delivered';
   queuedAt?: string;
   deliveredAt?: string;
   notes: string;
+  consentTiers?: ConsentTiers;
 }
 
 export interface GlossaryEntry {
