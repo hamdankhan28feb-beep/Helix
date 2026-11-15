@@ -1,9 +1,0 @@
-{
-  "name": "HELIX — Your Body's Flight Computer",
-  "short_name": "HELIX",
-  "description": "Offline-first astronaut self-assessment support.",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#070B14",
-  "theme_color": "#070B14"
-}
