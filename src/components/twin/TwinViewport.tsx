@@ -68,6 +68,7 @@ interface TwinViewportProps {
   colorBlindSafe: boolean;
   reduceMotion: boolean;
   forceFallback2D: boolean;
+  theme?: 'dark' | 'light';
   onSelectRegion: (id: RegionId) => void;
   onChangeLayer: (layer: TwinLayer) => void;
   highlightedCoachStep?: number | null;
@@ -89,6 +90,7 @@ export const TwinViewport: React.FC<TwinViewportProps> = ({
   colorBlindSafe,
   reduceMotion,
   forceFallback2D,
+  theme,
   onSelectRegion,
   onChangeLayer,
   highlightedCoachStep,
@@ -212,6 +214,7 @@ export const TwinViewport: React.FC<TwinViewportProps> = ({
                 colorBlindSafe={colorBlindSafe}
                 reduceMotion={reduceMotion}
                 isSoftwareGl={webglProbe.isSoftwareGl}
+                theme={theme}
                 cameraCommand={cameraCommand}
                 onSelectRegion={onSelectRegion}
                 onHoverRegion={setHoveredRegionId}

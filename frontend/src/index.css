@@ -59,6 +59,96 @@ html.helix-colorblind-safe {
   --status-escalate: #D55E00;
 }
 
+/* Orbital Day (Light Mode) */
+html.helix-light-mode {
+  --helix-ink: #F1F5F9;
+  --helix-surface-1: #FFFFFF;
+  --helix-surface-2: #F8FAFC;
+  --helix-surface-3: #EDF2F7;
+  --helix-hairline: rgba(15, 23, 42, 0.09);
+  --helix-highlight: rgba(255, 255, 255, 0.95);
+  --helix-text: #0F172A;
+  --helix-muted: #64748B;
+  --helix-accent: #0284C7;
+
+  --status-nominal: #0D9488;
+  --status-watch: #0284C7;
+  --status-caution: #D97706;
+  --status-escalate: #E11D48;
+}
+
+html.helix-light-mode body {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+}
+
+html.helix-light-mode .cockpit-panel {
+  background-color: #FFFFFF !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.02) !important;
+}
+
+html.helix-light-mode .cockpit-panel-elevated {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: rgba(15, 23, 42, 0.09) !important;
+  box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.12), 0 1px 3px 0 rgba(15, 23, 42, 0.04) !important;
+}
+
+/* Light mode utility class mappings for smooth global theme support */
+html.helix-light-mode header.bg-\[\#070B14\]\/95,
+html.helix-light-mode header {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html.helix-light-mode [class*="bg-[#070B14]"] {
+  background-color: #F8FAFC !important;
+}
+
+html.helix-light-mode [class*="bg-[#0E1522]"] {
+  background-color: #FFFFFF !important;
+}
+
+html.helix-light-mode [class*="bg-[#151E2E]"] {
+  background-color: #F1F5F9 !important;
+}
+
+html.helix-light-mode [class*="text-[#E8EEF7]"] {
+  color: #0F172A !important;
+}
+
+html.helix-light-mode [class*="text-[#8A97AD]"] {
+  color: #64748B !important;
+}
+
+html.helix-light-mode [class*="border-white/"] {
+  border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html.helix-light-mode [class*="hover:bg-white/5"]:hover,
+html.helix-light-mode [class*="hover:bg-white/10"]:hover {
+  background-color: rgba(15, 23, 42, 0.05) !important;
+}
+
+html.helix-light-mode [class*="bg-[#7FB2FF]"] {
+  background-color: #0284C7 !important;
+  color: #FFFFFF !important;
+}
+
+html.helix-light-mode [class*="text-[#7FB2FF]"] {
+  color: #0284C7 !important;
+}
+
+html.helix-light-mode [class*="border-[#7FB2FF]"] {
+  border-color: #0284C7 !important;
+}
+
+html.helix-light-mode ::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18) !important;
+}
+
 .font-mono-tabular {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;

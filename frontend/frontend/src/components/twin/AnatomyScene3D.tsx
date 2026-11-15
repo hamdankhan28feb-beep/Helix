@@ -33,6 +33,7 @@ interface AnatomyScene3DProps {
   colorBlindSafe: boolean;
   reduceMotion: boolean;
   isSoftwareGl: boolean;
+  theme?: 'dark' | 'light';
   cameraCommand: CameraCommand | null;
   onSelectRegion: (id: RegionId) => void;
   onHoverRegion: (id: RegionId | null) => void;
@@ -114,17 +115,19 @@ function SkeletonLayer({
   regions,
   activeHazards,
   colorBlindSafe,
+  theme,
 }: {
   regions: BodyRegion[];
   activeHazards: HazardId[];
   colorBlindSafe: boolean;
+  theme?: 'dark' | 'light';
 }) {
   const brain = getRegionState(regions, 'brain_eyes', activeHazards, colorBlindSafe);
   const mind = getRegionState(regions, 'mind_sleep', activeHazards, colorBlindSafe);
   const bones = getRegionState(regions, 'bones_muscles', activeHazards, colorBlindSafe);
   const heart = getRegionState(regions, 'heart_vessels', activeHazards, colorBlindSafe);
 
-  const boneBaseColor = '#D8E2F0';
+  const boneBaseColor = theme === 'light' ? '#475569' : '#D8E2F0';
 
   return (
     <group>
@@ -614,8 +617,8 @@ function CameraRig({
     flyActiveRef.current = false;
 
     if (cameraCommand.type === 'reset') {
-      _targetVec.set(0, 0.90, 0);
-      _camGoal.set(0, 0.90, 2.38);
+      _targetVec.set(0, 0.88, 0);
+      _camGoal.set(0, 0.88, 2.85);
       flyActiveRef.current = true;
       return;
     }
@@ -659,11 +662,11 @@ function CameraRig({
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      target={[0, 0.90, 0]}
+      target={[0, 0.88, 0]}
       enablePan={false}
       enableDamping={!isSoftwareGl && !reduceMotion}
       dampingFactor={0.07}
-      minDistance={0.95}
+      minDistance={1.1}
       maxDistance={3.8}
       minPolarAngle={0.45}
       maxPolarAngle={2.25}
@@ -701,6 +704,7 @@ function TwinAssembly(props: AnatomyScene3DProps) {
           regions={props.regions}
           activeHazards={props.activeHazards}
           colorBlindSafe={props.colorBlindSafe}
+          theme={props.theme}
         />
       )}
       {props.layer === 'organs' && (
@@ -781,7 +785,7 @@ export const AnatomyScene3D: React.FC<AnatomyScene3DProps> = (props) => {
   return (
     <Canvas
       dpr={props.isSoftwareGl ? 1 : [1, 1.75]}
-      camera={{ position: [0, 0.90, 2.38], fov: 40, near: 0.1, far: 30 }}
+      camera={{ position: [0, 0.88, 2.85], fov: 40, near: 0.1, far: 30 }}
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
       gl={{
         antialias: !props.isSoftwareGl,
@@ -794,8 +798,8 @@ export const AnatomyScene3D: React.FC<AnatomyScene3DProps> = (props) => {
         gl.toneMappingExposure = 1.08;
       }}
     >
-      <ambientLight intensity={0.45} />
-      <hemisphereLight args={['#9EC5FF', '#141D2E', 0.75]} />
+      <ambientLight intensity={props.theme === 'light' ? 0.75 : 0.45} />
+      <hemisphereLight args={[props.theme === 'light' ? '#BAE6FD' : '#9EC5FF', props.theme === 'light' ? '#E2E8F0' : '#141D2E', props.theme === 'light' ? 0.85 : 0.75]} />
       <directionalLight position={[2.8, 3.6, 3.2]} intensity={1.35} color="#FFF3E0" />
       <directionalLight position={[-2.6, 1.8, -2.5]} intensity={0.75} color="#7FB2FF" />
 

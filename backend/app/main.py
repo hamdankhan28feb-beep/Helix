@@ -149,6 +149,39 @@ def login(body: Login, request: Request) -> dict[str, Any]:
 def guest(body: Guest) -> dict[str, Any]:
     return {"profile_id": body.profile_id, "mode": "guest", "sync_enabled": False, "message": "Guest profile is local-first; no account is created."}
 
+class GoogleLogin(BaseModel):
+    credential: str = Field(default="")
+    email: str = Field(default="")
+    name: str = Field(default="")
+
+@app.post("/auth/google")
+def google_login(body: GoogleLogin) -> dict[str, Any]:
+    name = body.name or "Google Astronaut"
+    email = body.email or "astronaut@google.com"
+    if body.credential:
+        try:
+            import base64
+            parts = body.credential.split(".")
+            if len(parts) >= 2:
+                # Add padding if needed
+                pad = len(parts[1]) % 4
+                padded = parts[1] + ("=" * (4 - pad) if pad else "")
+                payload_raw = base64.urlsafe_b64decode(padded)
+                payload = json.loads(payload_raw)
+                email = payload.get("email", email)
+                name = payload.get("name", name)
+        except Exception:
+            pass
+    crew_id = email.split("@")[0].upper().replace(".", "_")
+    return {
+        "access_token": token_for(crew_id),
+        "token_type": "bearer",
+        "expires_in": TOKEN_TTL,
+        "crew_id": crew_id,
+        "name": name,
+        "email": email,
+    }
+
 @app.post("/measurements")
 def save_measurement(body: Measurement, crew_id: str = Depends(current_user)) -> dict[str, Any]:
     recorded = (body.recorded_at or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()

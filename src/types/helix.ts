@@ -235,6 +235,7 @@ export interface AccessibilitySettings {
   ambientAudio: boolean;
   offlineSimulated: boolean;
   forceFallback2D: boolean;
+  theme?: 'dark' | 'light';
 }
 
 export interface DemoKeyframe {

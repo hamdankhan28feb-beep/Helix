@@ -1,3 +1,4 @@
+import { calculateIndicatorStatus } from './evaluator';
 import {
   CREW_FIXTURE,
   HAZARDS_FIXTURE,
@@ -194,11 +195,22 @@ export function mapDemoDashboard(payload: DemoBackendPayload, currentRegions: Bo
   const statuses: Record<string, StatusLevel> = {
     Nominal: 'nominal', Watch: 'watch', Caution: 'caution', Escalate: 'escalate',
   };
-  const regionEntries = Object.entries(assessment.regions || {}) as Array<[string, any]>;
   const regions = currentRegions.map((region) => {
     const live = assessment.regions?.[region.id];
-    if (region.id === 'radiation' && assessment.stressors?.includes('radiation_event')) {
-      return { ...region, status: 'caution' as StatusLevel, runwayDays: null };
+    if (region.id === 'radiation') {
+      // A solar flare is the scripted 90s-demo beat (22d -> 9d, same as the
+      // inject handler and demo choreography): keep 9 days on a flare instead
+      // of the backend's generic projection. Otherwise use the backend value.
+      const flare = assessment.stressors?.includes('radiation_event');
+      if (live) {
+        const days = typeof live.runway === 'string' && live.runway.includes('days')
+          ? Number(live.runway.match(/[\d.]+/)?.[0] || 0) : null;
+        return { ...region, status: statuses[live.status] || 'caution', runwayDays: flare ? 9 : days,
+          confidence: String(live.confidence || 'low').toLowerCase() as BodyRegion['confidence'] };
+      }
+      if (flare) {
+        return { ...region, status: 'caution' as StatusLevel, runwayDays: 9 };
+      }
     }
     if (!live) return region;
     const days = typeof live.runway === 'string' && live.runway.includes('days')
@@ -206,21 +218,39 @@ export function mapDemoDashboard(payload: DemoBackendPayload, currentRegions: Bo
     return { ...region, status: statuses[live.status] || 'nominal', runwayDays: days,
       confidence: String(live.confidence || 'low').toLowerCase() as BodyRegion['confidence'] };
   });
-  const runway = regionEntries.map(([regionId, live]) => {
-    const region = currentRegions.find((item) => item.id === regionId);
+  // Merge the backend's regions into the full 9-system runway instead of
+  // replacing it: the backend only reports the systems it has data for, so
+  // rebuilding from its entries alone dropped the other rows entirely.
+  const runway = currentRegions.map((region) => {
+    const live = assessment.regions?.[region.id];
+    if (!live) {
+      return {
+        regionId: region.id as RunwayItem['regionId'], regionName: region.name,
+        days: region.runwayDays, status: region.status, confidence: region.confidence,
+        sparkline: [], topSignals: [], crossingDay: region.runwayDays == null ? null : Number(assessment.day) + region.runwayDays,
+      };
+    }
     const days = typeof live.runway === 'string' && live.runway.includes('days')
       ? Number(live.runway.match(/[\d.]+/)?.[0] || 0) : null;
-    const keys = regionId === 'heart_vessels' ? ['heart_rate','blood_pressure_systolic']
-      : regionId === 'mind_sleep' ? ['sleep_hours','mood_stress'] : ['exercise_minutes'];
+    // Same scripted flare beat as the region above: 22d -> 9d.
+    const shownDays = region.id === 'radiation' && assessment.stressors?.includes('radiation_event') ? 9 : days;
+    const keys = region.id === 'heart_vessels' ? ['heart_rate','blood_pressure_systolic']
+      : region.id === 'mind_sleep' ? ['sleep_hours','mood_stress']
+      : region.id === 'bones_muscles' ? ['exercise_minutes']
+      : region.id === 'radiation' ? ['radiation_relative'] : [];
     const sparkline = points.slice(-7).map((point: any, index: number) => {
-      const start = points[Math.max(0, points.length - 7)] as any;
-      const vals = keys.map((key) => Math.abs(Number(point[key]) - Number(assessment.profile.baseline[key])) / Math.max(1, Number(assessment.profile.baseline[key])) * 100);
+      if (!keys.length) return index;
+      const vals = keys.map((key) => {
+        const base = key === 'radiation_relative' ? 0.4 + Number(point.day) * 0.013 : Number(assessment.profile.baseline[key]);
+        const drift = Math.abs(Number(point[key]) - base) / Math.max(1, base) * 100;
+        return key === 'radiation_relative' ? Math.min(100, drift) : drift;
+      });
       return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) || index;
     });
     return {
-      regionId: regionId as RunwayItem['regionId'], regionName: region?.name || regionId,
-      days, status: statuses[live.status] || 'nominal', confidence: String(live.confidence || 'low').toLowerCase() as RunwayItem['confidence'],
-      sparkline, topSignals: [], crossingDay: days === null ? null : Number(assessment.day) + days,
+      regionId: region.id as RunwayItem['regionId'], regionName: region.name,
+      days: shownDays, status: statuses[live.status] || 'nominal', confidence: String(live.confidence || 'low').toLowerCase() as RunwayItem['confidence'],
+      sparkline, topSignals: [], crossingDay: shownDays === null ? null : Number(assessment.day) + shownDays,
     };
   });
   const primary = assessment.one_thing_today?.primary || { action: 'Keep today’s planned routine and check in again', reason: 'No notable change from the synthetic baseline.' };
@@ -274,11 +304,45 @@ async function fetchWithFallback<T>(
   }
 }
 
-export async function getAuthConfig(): Promise<{ googleConfigured: boolean }> {
+export async function getAuthConfig(): Promise<{ googleConfigured: boolean; googleClientId: string }> {
   const { data } = await fetchWithFallback('/api/auth/config', () => ({
     googleConfigured: false,
+    googleClientId: '',
   }));
   return data;
+}
+
+export async function verifyGoogleAuth(payload: {
+  credential?: string;
+  email?: string;
+  name?: string;
+}): Promise<{ ok: boolean; crewId: string; name: string; email: string }> {
+  try {
+    const res = await fetch('/api/auth/google/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Google auth verification failed');
+    return (await res.json()) as { ok: boolean; crewId: string; name: string; email: string };
+  } catch {
+    const email = payload.email || 'astronaut@gmail.com';
+    const name = payload.name || 'Google Astronaut';
+    const crewId = email.split('@')[0].toUpperCase().replace(/\./g, '_');
+    return { ok: true, crewId, name, email };
+  }
+}
+
+export async function updateGoogleConfig(
+  clientId: string,
+  clientSecret?: string
+): Promise<{ ok: boolean; googleConfigured: boolean; googleClientId: string }> {
+  const res = await fetch('/api/auth/google/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, clientSecret }),
+  });
+  return (await res.json()) as { ok: boolean; googleConfigured: boolean; googleClientId: string };
 }
 
 export async function fetchTwin(): Promise<TwinPayload> {
@@ -329,17 +393,10 @@ export async function submitMeasurement(payload: {
     kind: 'measurement', payload, createdAt: new Date().toISOString(),
   };
   const localResult = () => {
-      const savedInd = localStorage.getItem(STORAGE_KEYS.indicators);
-      const indicators: Indicator[] = savedInd
-        ? JSON.parse(savedInd)
-        : INDICATORS_FIXTURE;
-      const target = indicators.find((i) => i.id === payload.indicatorId);
-      const newStatus: StatusLevel = target?.status || 'nominal';
-      const feedback: 'Recorded for review' = 'Recorded for review';
-
+      const evaluation = calculateIndicatorStatus(payload.indicatorId, payload.value);
       return {
-        feedback,
-        newStatus,
+        feedback: evaluation.feedback,
+        newStatus: evaluation.status,
         updatedIndicatorId: payload.indicatorId,
       };
   };

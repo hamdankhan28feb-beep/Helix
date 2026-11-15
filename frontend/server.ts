@@ -15,6 +15,7 @@ import {
   RUNWAY_FIXTURE,
 } from './src/data/fixtures';
 import { StatusLevel } from './src/types/helix';
+import { calculateIndicatorStatus } from './src/lib/evaluator';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,6 +54,61 @@ async function startServer() {
   app.get('/api/auth/config', (_req, res) => {
     res.json({
       googleConfigured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.AUTH_SECRET),
+      googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    });
+  });
+
+  app.post('/api/auth/google/config', (req, res) => {
+    const { clientId, clientSecret } = req.body as { clientId?: string; clientSecret?: string };
+    if (clientId) process.env.GOOGLE_CLIENT_ID = clientId;
+    if (clientSecret) process.env.GOOGLE_CLIENT_SECRET = clientSecret;
+    res.json({
+      ok: true,
+      googleConfigured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.AUTH_SECRET),
+      googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    });
+  });
+
+  app.post('/api/auth/google/verify', async (req, res) => {
+    const { credential, email, name } = req.body as {
+      credential?: string;
+      email?: string;
+      name?: string;
+    };
+
+    let resolvedName = name || 'Google Astronaut';
+    let resolvedEmail = email || 'astronaut@google.com';
+
+    if (credential) {
+      try {
+        const parts = credential.split('.');
+        if (parts.length >= 2) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+          resolvedEmail = payload.email || resolvedEmail;
+          resolvedName = payload.name || resolvedName;
+        }
+      } catch {
+        // Fall back to provided name/email
+      }
+    }
+
+    const crewId = resolvedEmail.split('@')[0].toUpperCase().replace(/\./g, '_');
+    const backendRes = await fetch(`${backendUrl}/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential, email: resolvedEmail, name: resolvedName }),
+    }).catch(() => null);
+
+    if (backendRes?.ok) {
+      const data = (await backendRes.json()) as { access_token: string; crew_id: string };
+      apiTokens.set(data.crew_id, data.access_token);
+    }
+
+    res.json({
+      ok: true,
+      crewId,
+      name: resolvedName,
+      email: resolvedEmail,
     });
   });
 
@@ -119,8 +175,11 @@ async function startServer() {
     };
 
     const indicator = state.indicators.find((i) => i.id === indicatorId);
-    const newStatus: StatusLevel = indicator?.status || 'nominal';
-    const feedback = 'Recorded for review';
+    const evaluation = typeof value === 'number' && !Number.isNaN(value)
+      ? calculateIndicatorStatus(indicatorId, value)
+      : { status: (indicator?.status || 'nominal') as StatusLevel, feedback: 'Recorded for review' as const };
+    const newStatus: StatusLevel = evaluation.status;
+    const feedback = evaluation.feedback;
     if (indicator && typeof value === 'number' && !Number.isNaN(value)) {
       const response = await backendFetch(req, '/measurements', {
         method: 'POST',

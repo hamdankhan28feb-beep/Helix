@@ -55,6 +55,8 @@ import { OneThingCard } from './components/cockpit/OneThingCard';
 import { HealthRingsBar } from './components/cockpit/HealthRingsBar';
 import { RegionDrawer } from './components/drawers/RegionDrawer';
 import { MeasurementWizard } from './components/modals/MeasurementWizard';
+import { VitalsEntryModal } from './components/modals/VitalsEntryModal';
+import { applyUserMeasurement } from './lib/evaluator';
 import { WhyAndWhatIfModal } from './components/modals/WhyAndWhatIfModal';
 import { HelpMeNowModal } from './components/modals/HelpMeNowModal';
 import { LearnAndGlossaryModal } from './components/modals/LearnAndGlossaryModal';
@@ -144,6 +146,7 @@ export default function App() {
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardIndicatorId, setWizardIndicatorId] = useState<string | null>(null);
+  const [vitalsModalOpen, setVitalsModalOpen] = useState(false);
 
   const [whyModal, setWhyModal] = useState<{
     open: boolean;
@@ -177,13 +180,14 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Apply root accessibility HTML classes
+  // Apply root accessibility and theme HTML classes
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle('helix-large-text', settings.largeText);
     root.classList.toggle('helix-high-contrast', settings.highContrast);
     root.classList.toggle('helix-colorblind-safe', settings.colorBlindSafe);
     root.classList.toggle('helix-reduced-motion', settings.reduceMotion);
+    root.classList.toggle('helix-light-mode', settings.theme === 'light');
     saveLocalState('accessibility', settings);
     cabinAudio.toggle(settings.ambientAudio);
   }, [settings]);
@@ -429,6 +433,92 @@ export default function App() {
     showToast('Action logged. Your Rest ring updated gently.');
   };
 
+  const handleToggleTheme = () => {
+    setSettings((prev) => {
+      const nextTheme = prev.theme === 'light' ? 'dark' : 'light';
+      const updated: AccessibilitySettings = { ...prev, theme: nextTheme };
+      saveLocalState('accessibility', updated);
+      return updated;
+    });
+  };
+
+  const handleResetToCleanBaseline = () => {
+    const cleanIndicators = indicators.map((ind) => ({
+      ...ind,
+      value: ind.baseline,
+      status: 'nominal' as StatusLevel,
+      series: [
+        ...ind.series.slice(0, -1),
+        { day: 'Today', value: ind.baseline },
+      ],
+    }));
+
+    const cleanRegions = regions.map((r) => ({
+      ...r,
+      status: 'nominal' as StatusLevel,
+      runwayDays: null,
+    }));
+
+    const cleanRunway = baseRunway.map((rw) => ({
+      ...rw,
+      status: 'nominal' as StatusLevel,
+      days: null,
+    }));
+
+    const cleanRings: HealthRingsState = {
+      measure: 1.0,
+      rest: 0.95,
+      move: 0.92,
+      connect: 1.0,
+      streakDays: rings.streakDays,
+      badges: rings.badges,
+    };
+
+    setIndicators(cleanIndicators);
+    setRegions(cleanRegions);
+    setBaseRunway(cleanRunway);
+    setRings(cleanRings);
+    setActiveHazards([]);
+    setBackendStressors([]);
+
+    saveLocalState('indicators', cleanIndicators);
+    saveLocalState('regions', cleanRegions);
+    saveLocalState('rings', cleanRings);
+
+    showToast('Clean flight baseline active. All 9 physiological systems Nominal.');
+  };
+
+  const handleBatchVitalsSave = (entries: Array<{ indicatorId: string; value: number }>) => {
+    let curInd = [...indicators];
+    let curReg = [...regions];
+    let curRw = [...baseRunway];
+
+    entries.forEach(({ indicatorId, value }) => {
+      const res = applyUserMeasurement(indicatorId, value, curInd, curReg, curRw);
+      curInd = res.updatedIndicators;
+      curReg = res.updatedRegions;
+      curRw = res.updatedRunway;
+    });
+
+    setIndicators(curInd);
+    setRegions(curReg);
+    setBaseRunway(curRw);
+
+    setRings((prev) => {
+      const next = {
+        ...prev,
+        measure: Math.min(1, Number((prev.measure + 0.35).toFixed(2))),
+      };
+      saveLocalState('rings', next);
+      return next;
+    });
+
+    saveLocalState('indicators', curInd);
+    saveLocalState('regions', curReg);
+
+    showToast('Live vitals recorded. 3D Ghost Twin & health flight computer updated.');
+  };
+
   const handleIncrementRing = (key: 'move' | 'rest' | 'connect') => {
     setRings((prev) => {
       const nextVal = Math.min(1, Number((prev[key] + 0.25).toFixed(2)));
@@ -605,7 +695,12 @@ export default function App() {
         colorBlindSafe={settings.colorBlindSafe}
         demoActive={demoActive}
         flightSchoolSkipped={flightSchoolSkipped && !profile.flightSchoolCompleted}
+        theme={settings.theme || 'dark'}
         highlightedCoachStep={flightSchoolOpen ? flightSchoolStep : null}
+        onToggleTheme={handleToggleTheme}
+        onOpenVitalsEntry={() => setVitalsModalOpen(true)}
+        onResetToBaseline={handleResetToCleanBaseline}
+        onSignInGoogle={() => setScreen('signin')}
         onChangeEnvironment={(env) => {
           setEnvironment(env);
           setProfile((p) => {
@@ -704,6 +799,7 @@ export default function App() {
                   colorBlindSafe={settings.colorBlindSafe}
                   reduceMotion={settings.reduceMotion}
                   forceFallback2D={settings.forceFallback2D}
+                  theme={settings.theme || 'dark'}
                   onSelectRegion={handleSelectRegion}
                   onChangeLayer={setLayer}
                   highlightedCoachStep={flightSchoolOpen ? flightSchoolStep : null}
@@ -852,6 +948,15 @@ export default function App() {
           return res;
         }}
         onOpenSurgeonPacket={() => setHomeTab('summary')}
+      />
+
+      <VitalsEntryModal
+        isOpen={vitalsModalOpen}
+        indicators={indicators}
+        colorBlindSafe={settings.colorBlindSafe}
+        onClose={() => setVitalsModalOpen(false)}
+        onSaveVitals={handleBatchVitalsSave}
+        onResetToBaseline={handleResetToCleanBaseline}
       />
 
       <WhyAndWhatIfModal

@@ -81,6 +81,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
+        {/* Cockpit Theme */}
+        <section>
+          <h3 className="text-xs font-semibold text-[#7FB2FF] mb-2">
+            Cockpit appearance
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => onUpdateSettings({ ...settings, theme: 'dark' })}
+              className={cn(
+                'py-2.5 px-3 rounded-xl text-xs font-medium border flex items-center justify-center gap-2 cursor-pointer',
+                (settings.theme || 'dark') === 'dark'
+                  ? 'bg-[#7FB2FF]/18 border-[#7FB2FF] text-[#E8EEF7]'
+                  : 'bg-[#070B14] border-white/10 text-[#8A97AD]'
+              )}
+            >
+              <span>🌙 Calm Cockpit (Dark)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onUpdateSettings({ ...settings, theme: 'light' })}
+              className={cn(
+                'py-2.5 px-3 rounded-xl text-xs font-medium border flex items-center justify-center gap-2 cursor-pointer',
+                settings.theme === 'light'
+                  ? 'bg-[#7FB2FF]/18 border-[#7FB2FF] text-[#E8EEF7]'
+                  : 'bg-[#070B14] border-white/10 text-[#8A97AD]'
+              )}
+            >
+              <span>☀️ Orbital Day (Light)</span>
+            </button>
+          </div>
+        </section>
+
         {/* Explanation Depth */}
         <section>
           <h3 className="text-xs font-semibold text-[#7FB2FF] mb-2">
@@ -155,7 +188,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 desc: 'Preview the zero-WebGL stylized SVG twin.',
               },
             ] as Array<{
-              key: keyof AccessibilitySettings;
+              key: 'largeText' | 'highContrast' | 'colorBlindSafe' | 'reduceMotion' | 'ambientAudio' | 'offlineSimulated' | 'forceFallback2D';
               label: string;
               desc: string;
             }>

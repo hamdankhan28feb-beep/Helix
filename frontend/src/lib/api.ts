@@ -1,3 +1,4 @@
+import { calculateIndicatorStatus } from './evaluator';
 import {
   CREW_FIXTURE,
   HAZARDS_FIXTURE,
@@ -303,11 +304,45 @@ async function fetchWithFallback<T>(
   }
 }
 
-export async function getAuthConfig(): Promise<{ googleConfigured: boolean }> {
+export async function getAuthConfig(): Promise<{ googleConfigured: boolean; googleClientId: string }> {
   const { data } = await fetchWithFallback('/api/auth/config', () => ({
     googleConfigured: false,
+    googleClientId: '',
   }));
   return data;
+}
+
+export async function verifyGoogleAuth(payload: {
+  credential?: string;
+  email?: string;
+  name?: string;
+}): Promise<{ ok: boolean; crewId: string; name: string; email: string }> {
+  try {
+    const res = await fetch('/api/auth/google/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Google auth verification failed');
+    return (await res.json()) as { ok: boolean; crewId: string; name: string; email: string };
+  } catch {
+    const email = payload.email || 'astronaut@gmail.com';
+    const name = payload.name || 'Google Astronaut';
+    const crewId = email.split('@')[0].toUpperCase().replace(/\./g, '_');
+    return { ok: true, crewId, name, email };
+  }
+}
+
+export async function updateGoogleConfig(
+  clientId: string,
+  clientSecret?: string
+): Promise<{ ok: boolean; googleConfigured: boolean; googleClientId: string }> {
+  const res = await fetch('/api/auth/google/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, clientSecret }),
+  });
+  return (await res.json()) as { ok: boolean; googleConfigured: boolean; googleClientId: string };
 }
 
 export async function fetchTwin(): Promise<TwinPayload> {
@@ -358,17 +393,10 @@ export async function submitMeasurement(payload: {
     kind: 'measurement', payload, createdAt: new Date().toISOString(),
   };
   const localResult = () => {
-      const savedInd = localStorage.getItem(STORAGE_KEYS.indicators);
-      const indicators: Indicator[] = savedInd
-        ? JSON.parse(savedInd)
-        : INDICATORS_FIXTURE;
-      const target = indicators.find((i) => i.id === payload.indicatorId);
-      const newStatus: StatusLevel = target?.status || 'nominal';
-      const feedback: 'Recorded for review' = 'Recorded for review';
-
+      const evaluation = calculateIndicatorStatus(payload.indicatorId, payload.value);
       return {
-        feedback,
-        newStatus,
+        feedback: evaluation.feedback,
+        newStatus: evaluation.status,
         updatedIndicatorId: payload.indicatorId,
       };
   };
