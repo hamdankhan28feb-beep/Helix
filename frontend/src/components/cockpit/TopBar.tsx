@@ -17,6 +17,7 @@ import {
   Activity,
   RotateCcw,
   Radio,
+  Mic,
 } from 'lucide-react';
 import { HAZARDS_FIXTURE } from '../../data/fixtures';
 import { ENVIRONMENT_CONFIG } from '../../lib/tokens';
@@ -51,6 +52,8 @@ interface TopBarProps {
   onReplayFlightSchool: () => void;
   onOpenSettings: () => void;
   onOpenVitalsEntry: () => void;
+  onOpenSensorStream?: () => void;
+  onOpenVoiceCheck?: () => void;
   onResetToBaseline: () => void;
   onToggleTheme: () => void;
   onSignInGoogle?: () => void;
@@ -78,6 +81,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   onReplayFlightSchool,
   onOpenSettings,
   onOpenVitalsEntry,
+  onOpenSensorStream,
+  onOpenVoiceCheck,
   onResetToBaseline,
   onToggleTheme,
   onSignInGoogle,
@@ -193,6 +198,32 @@ export const TopBar: React.FC<TopBarProps> = ({
             <PlusCircle className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Log Vital</span>
           </button>
+
+          {/* Live Bio-Monitor Sensor Stream */}
+          {onOpenSensorStream && (
+            <button
+              type="button"
+              onClick={onOpenSensorStream}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-[#3DE0C5]/15 text-[#3DE0C5] border border-[#3DE0C5]/30 hover:bg-[#3DE0C5]/25 transition-all cursor-pointer"
+              title="Open Smart Shirt / BLE Live Telemetry Simulator"
+            >
+              <Radio className="w-3.5 h-3.5 text-[#3DE0C5] animate-pulse" aria-hidden="true" />
+              <span className="hidden md:inline">Sensor Stream</span>
+            </button>
+          )}
+
+          {/* Acoustic Biomarker Voice Check-In */}
+          {onOpenVoiceCheck && (
+            <button
+              type="button"
+              onClick={onOpenVoiceCheck}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-[#F4B860]/15 text-[#F4B860] border border-[#F4B860]/30 hover:bg-[#F4B860]/25 transition-all cursor-pointer"
+              title="Open Voice Check-In & Acoustic Biomarker Analyzer"
+            >
+              <Mic className="w-3.5 h-3.5 text-[#F4B860]" aria-hidden="true" />
+              <span className="hidden md:inline">Voice Check</span>
+            </button>
+          )}
 
           {/* Theme Switcher Toggle (Light / Dark) */}
           <button

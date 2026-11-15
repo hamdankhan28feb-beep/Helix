@@ -607,6 +607,10 @@ function CameraRig({
       _targetVec.set(...selectedRegion.cameraTarget);
       _camGoal.set(...selectedRegion.cameraPos);
       flyActiveRef.current = true;
+    } else {
+      _targetVec.set(0, 0.92, 0);
+      _camGoal.set(0, 0.92, 2.95);
+      flyActiveRef.current = true;
     }
   }, [selectedRegion]);
 
@@ -617,8 +621,8 @@ function CameraRig({
     flyActiveRef.current = false;
 
     if (cameraCommand.type === 'reset') {
-      _targetVec.set(0, 0.88, 0);
-      _camGoal.set(0, 0.88, 2.85);
+      _targetVec.set(0, 0.92, 0);
+      _camGoal.set(0, 0.92, 2.95);
       flyActiveRef.current = true;
       return;
     }
@@ -662,7 +666,7 @@ function CameraRig({
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      target={[0, 0.88, 0]}
+      target={[0, 0.92, 0]}
       enablePan={false}
       enableDamping={!isSoftwareGl && !reduceMotion}
       dampingFactor={0.07}
@@ -785,7 +789,7 @@ export const AnatomyScene3D: React.FC<AnatomyScene3DProps> = (props) => {
   return (
     <Canvas
       dpr={props.isSoftwareGl ? 1 : [1, 1.75]}
-      camera={{ position: [0, 0.88, 2.85], fov: 40, near: 0.1, far: 30 }}
+      camera={{ position: [0, 0.92, 2.95], fov: 40, near: 0.1, far: 30 }}
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
       gl={{
         antialias: !props.isSoftwareGl,

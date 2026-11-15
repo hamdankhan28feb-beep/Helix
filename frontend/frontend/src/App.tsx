@@ -56,6 +56,8 @@ import { HealthRingsBar } from './components/cockpit/HealthRingsBar';
 import { RegionDrawer } from './components/drawers/RegionDrawer';
 import { MeasurementWizard } from './components/modals/MeasurementWizard';
 import { VitalsEntryModal } from './components/modals/VitalsEntryModal';
+import { SensorStreamModal } from './components/screens/SensorStreamModal';
+import { VoiceCheckInModal } from './components/modals/VoiceCheckInModal';
 import { applyUserMeasurement } from './lib/evaluator';
 import { WhyAndWhatIfModal } from './components/modals/WhyAndWhatIfModal';
 import { HelpMeNowModal } from './components/modals/HelpMeNowModal';
@@ -147,6 +149,8 @@ export default function App() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardIndicatorId, setWizardIndicatorId] = useState<string | null>(null);
   const [vitalsModalOpen, setVitalsModalOpen] = useState(false);
+  const [sensorModalOpen, setSensorModalOpen] = useState(false);
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
 
   const [whyModal, setWhyModal] = useState<{
     open: boolean;
@@ -699,6 +703,8 @@ export default function App() {
         highlightedCoachStep={flightSchoolOpen ? flightSchoolStep : null}
         onToggleTheme={handleToggleTheme}
         onOpenVitalsEntry={() => setVitalsModalOpen(true)}
+        onOpenSensorStream={() => setSensorModalOpen(true)}
+        onOpenVoiceCheck={() => setVoiceModalOpen(true)}
         onResetToBaseline={handleResetToCleanBaseline}
         onSignInGoogle={() => setScreen('signin')}
         onChangeEnvironment={(env) => {
@@ -957,6 +963,73 @@ export default function App() {
         onClose={() => setVitalsModalOpen(false)}
         onSaveVitals={handleBatchVitalsSave}
         onResetToBaseline={handleResetToCleanBaseline}
+      />
+
+      <SensorStreamModal
+        isOpen={sensorModalOpen}
+        onClose={() => setSensorModalOpen(false)}
+        onApplyStreamingVitals={async (vitals) => {
+          let curInd = [...indicators];
+          let curReg = [...regions];
+          let curRw = [...baseRunway];
+
+          if (curInd.some((i) => i.id === 'resting_hr')) {
+            const r1 = applyUserMeasurement('resting_hr', vitals.heartRate, curInd, curReg, curRw);
+            curInd = r1.updatedIndicators;
+            curReg = r1.updatedRegions;
+            curRw = r1.updatedRunway;
+          }
+          if (curInd.some((i) => i.id === 'temperature')) {
+            const r2 = applyUserMeasurement('temperature', vitals.skinTemp, curInd, curReg, curRw);
+            curInd = r2.updatedIndicators;
+            curReg = r2.updatedRegions;
+            curRw = r2.updatedRunway;
+          }
+
+          setIndicators(curInd);
+          setRegions(curReg);
+          setBaseRunway(curRw);
+          saveLocalState('indicators', curInd);
+          saveLocalState('regions', curReg);
+
+          setRings((prev) => {
+            const next = {
+              ...prev,
+              measure: Math.min(1, Number((prev.measure + 0.35).toFixed(2))),
+            };
+            saveLocalState('rings', next);
+            return next;
+          });
+
+          showToast(
+            `Bio-Monitor smart shirt stream applied: HR ${vitals.heartRate} bpm, Resp ${vitals.respiration} br/min, Skin Temp ${vitals.skinTemp.toFixed(1)}°C`
+          );
+          setSensorModalOpen(false);
+        }}
+      />
+
+      <VoiceCheckInModal
+        isOpen={voiceModalOpen}
+        onClose={() => setVoiceModalOpen(false)}
+        onSaveVoiceScore={({ vocalStrain, readinessPct }) => {
+          const newStatus: StatusLevel =
+            readinessPct >= 85 ? 'nominal' : readinessPct >= 70 ? 'watch' : 'caution';
+          setRegions((prev) =>
+            prev.map((r) =>
+              r.id === 'mind_sleep'
+                ? {
+                    ...r,
+                    status: newStatus,
+                    runwayDays: readinessPct >= 85 ? null : readinessPct >= 70 ? 21 : 9,
+                  }
+                : r
+            )
+          );
+          handleIncrementRing('rest');
+          handleIncrementRing('connect');
+          showToast(`Voice biomarker logged: Readiness ${readinessPct}% (${vocalStrain})`);
+          setVoiceModalOpen(false);
+        }}
       />
 
       <WhyAndWhatIfModal

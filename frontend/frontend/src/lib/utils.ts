@@ -87,20 +87,10 @@ export function applyEnvironmentAndHazardsToRunway(
     if (!region) return { ...item, deltaDays: 0 };
 
     let days = item.days;
-    if (days !== null) {
-      // Subtle realistic environment modifier
-      if (environment === 'mars' && region.id === 'bones_muscles') days += 3;
-      if (environment === 'transit' && region.id === 'radiation') days = Math.max(4, days - 3);
-      if (environment === 'lunar' && region.id === 'lungs_oxygen') days = Math.max(5, days - 2);
-
-      // Active hazard lens pressure preview
-      if (activeHazards.length > 0 && region.affectedByHazards.some((h) => activeHazards.includes(h))) {
-        const overlapCount = region.affectedByHazards.filter((h) =>
-          activeHazards.includes(h)
-        ).length;
-        days = Math.max(2, days - overlapCount);
-      }
-    }
+    // NOTE: environment/hazard modifiers intentionally NOT applied here.
+    // Twin, Runway and Surgeon Packet must always show the same number
+    // (single source of truth). The modifiers made the Runway disagree
+    // (e.g. transit showed Radiation 19d while Twin/Packet showed 22d).
 
     const whatIfBonus = calculateWhatIfDelta(region, adjustments);
     const adjustedDays = days === null ? null : Math.min(90, days + whatIfBonus);
