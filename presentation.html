@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HELIX — Autonomous Astronaut Health Cockpit (Presentation)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #070B14;
+      --card-bg: #101726;
+      --card-border: rgba(127, 178, 255, 0.16);
+      --accent-blue: #7FB2FF;
+      --accent-cyan: #3DE0C5;
+      --accent-amber: #F4B860;
+      --accent-coral: #FF8C66;
+      --text-main: #E8EEF7;
+      --text-muted: #8A97AD;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* Top Presentation Bar */
+    header {
+      height: 54px;
+      background: rgba(7, 11, 20, 0.9);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 50;
+      backdrop-filter: blur(12px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.05em;
+    }
+
+    .brand-pill {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      background: rgba(61, 224, 197, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(61, 224, 197, 0.3);
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    button.btn {
+      background: #151E2E;
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    button.btn:hover {
+      background: rgba(127, 178, 255, 0.15);
+      border-color: var(--accent-blue);
+      color: #fff;
+    }
+
+    button.btn.active {
+      background: var(--accent-blue);
+      color: #070B14;
+      border-color: var(--accent-blue);
+      font-weight: 600;
+    }
+
+    /* Main Deck Stage */
+    main {
+      flex: 1;
+      display: flex;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slide-viewport {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      position: relative;
+    }
+
+    .slide {
+      width: 100%;
+      max-width: 1280px;
+      height: 100%;
+      max-height: 720px;
+      aspect-ratio: 16 / 9;
+      background: #0B111E;
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 44px 56px;
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    .slide.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.985); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* Slide Typography */
+    .slide-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+
+    .slide-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1.15;
+      margin-bottom: 24px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      flex: 1;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      flex: 1;
+    }
+
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 22px 24px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--accent-blue);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .panel-list li {
+      font-size: 13.5px;
+      line-height: 1.45;
+      color: var(--text-main);
+    }
+
+    .panel-list li strong {
+      color: var(--accent-cyan);
+    }
+
+    .hero-stat {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 52px;
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    /* Speaker Notes Panel */
+    aside.speaker-notes-drawer {
+      width: 360px;
+      background: #0E1524;
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
+      display: none;
+      flex-direction: column;
+      padding: 20px 24px;
+      overflow-y: auto;
+      z-index: 40;
+    }
+
+    aside.speaker-notes-drawer.open {
+      display: flex;
+    }
+
+    .notes-header {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent-amber);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .notes-content {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #CBD5E1;
+    }
+
+    .notes-content p {
+      margin-bottom: 12px;
+    }
+
+    .notes-action {
+      background: rgba(127, 178, 255, 0.1);
+      border-left: 3px solid var(--accent-blue);
+      padding: 8px 12px;
+      font-size: 12.5px;
+      color: var(--accent-blue);
+      border-radius: 0 6px 6px 0;
+      margin: 14px 0;
+    }
+
+    /* Bottom Footer Bar */
+    footer {
+      height: 48px;
+      background: rgba(7, 11, 20, 0.95);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .slide-progress {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .key-hints span {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #CBD5E1;
+      margin: 0 2px;
+    }
+
+    /* Print Formatting */
+    @media print {
+      body {
+        overflow: visible;
+        height: auto;
+        background: #fff;
+        color: #000;
+      }
+      header, footer, aside.speaker-notes-drawer {
+        display: none !important;
+      }
+      .slide-viewport {
+        padding: 0;
+      }
+      .slide {
+        display: flex !important;
+        page-break-after: always;
+        border: none;
+        box-shadow: none;
+        max-width: 100%;
+        max-height: 100vh;
+        border-radius: 0;
+        background: #0B111E !important;
+        color: #E8EEF7 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation & Controls -->
+  <header>
+    <div class="brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7FB2FF" stroke-width="2">
+        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+      </svg>
+      <span>HELIX COCKPIT DECK</span>
+      <span class="brand-pill">NASA HRP ALIGNED</span>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="prevBtn" title="Previous Slide (Left Arrow)">◀ Prev</button>
+      <button class="btn" id="nextBtn" title="Next Slide (Right Arrow or Space)">Next ▶</button>
+      <button class="btn" id="notesToggleBtn" title="Toggle Speaker Notes (P key)">📝 Speaker Notes</button>
+      <button class="btn" id="fullscreenBtn" title="Toggle Fullscreen (F key)">⛶ Fullscreen</button>
+      <button class="btn" onclick="window.print()" title="Print or Save as PDF">🖨️ Save PDF</button>
+      <a href="http://localhost:3000" target="_blank" style="text-decoration: none;">
+        <button class="btn active">🚀 Launch Live App</button>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Slide Viewport -->
+  <main>
+    <div class="slide-viewport">
+
+      <!-- SLIDE 1 -->
+      <section class="slide active" data-slide="1">
+        <div>
+          <div class="slide-tag">NASA HUMAN RESEARCH PROGRAM • DEEP-SPACE TELEMETRY</div>
+          <h1 class="slide-title">HELIX: The Body's Flight Computer</h1>
+          <p style="font-size: 18px; color: var(--accent-blue); margin-top: -12px; margin-bottom: 28px;">
+            Autonomous 3D Biometric Cockpit for the 44-Minute Mars Telemedicine Blackout
+          </p>
+        </div>
+
+        <div class="grid-3">
+          <div class="panel">
+            <div class="panel-title">📡 44-Minute Comms Delay</div>
+            <div class="hero-stat" style="color: var(--accent-coral);">44 min</div>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+              Speed-of-light delay makes real-time medical consultation from Houston impossible during Mars transit.
+            </p>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">🦴 Silent Biology Drift</div>
+            <div class="hero-stat" style="color: var(--accent-amber);">-1.5%</div>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+              Bone calcium loss per month in zero-g, accompanied by cephalad fluid shifts and SANS optic edema.
+            </p>
+          </div>
+
+          <div class="panel" style="border-color: rgba(61, 224, 197, 0.4);">
+            <div class="panel-title" style="color: var(--accent-cyan);">✨ The Solution: HELIX</div>
+            <div class="hero-stat" style="color: var(--accent-cyan);">100%</div>
+            <p style="font-size: 13px; color: var(--text-main); line-height: 1.5;">
+              Offline-first 3D Ghost Twin, Predictive Health Runway™, and One Thing Today executive action engine.
+            </p>
+          </div>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
+          MISSION ELAPSED TIME: MET +142d • DEEP-SPACE FLIGHT DECK
+        </div>
+      </section>
+
+      <!-- SLIDE 2 -->
+      <section class="slide" data-slide="2">
+        <div>
+          <div class="slide-tag">THE HUMAN FACTORS DILEMMA</div>
+          <h1 class="slide-title">Why Traditional Medical Telemetry Fails in Deep Space</h1>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-title" style="color: var(--accent-amber);">⚠️ Silent Physiological Decay in Microgravity</div>
+            <ul class="panel-list">
+              <li><strong>Bone Demineralization:</strong> Continuous -1.5% monthly loss in spine and pelvis without painful early symptoms.</li>
+              <li><strong>Cephalad Fluid Shift:</strong> Up to 2 liters of fluid moves upward, raising intracranial pressure.</li>
+              <li><strong>SANS (Vision Loss):</strong> Optic disc edema and choroidal folds threaten permanent astronaut blindness.</li>
+              <li><strong>Cognitive Exhaustion:</strong> Extreme isolation and confinement degrade executive decision-making.</li>
+            </ul>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title" style="color: var(--accent-coral);">❌ The Failure of Legacy ICU Dashboards</div>
+            <ul class="panel-list">
+              <li><strong>Wall of 50 Graphs:</strong> Dense, multi-channel line charts cause immediate cognitive overload under stress.</li>
+              <li><strong>Acute Alarm Fatigue:</strong> Constantly screaming red alarms desensitize crew members to real emergencies.</li>
+              <li><strong>No Actionable Answers:</strong> Monitors state numbers but never answer: <em>"What should I do right now?"</em></li>
+              <li><strong>The Calm Cockpit Remedy:</strong> NASA-STD-3001 compliant glanceable spatial body models with zero noise.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
+          PHILOSOPHY: REPLACE ALARM FATIGUE WITH PREDICTIVE SPATIAL INSIGHT
+        </div>
+      </section>
+
+      <!-- SLIDE 3 -->
+      <section class="slide" data-slide="3">
+        <div>
+          <div class="slide-tag">SPATIAL PHYSIOLOGICAL COGNITION</div>
+          <h1 class="slide-title">The 3D Ghost Twin & Predictive Health Runway™</h1>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-title" style="color: var(--accent-cyan);">🧬 3D Ghost Twin (Three.js WebGL)</div>
+            <ul class="panel-list">
+              <li><strong>Ghost Baseline Overlay:</strong> Glowing translucent blue wireframe displays pre-launch Earth baseline behind current drifted skeleton.</li>
+              <li><strong>4 Anatomic Layers:</strong> Instant toggle between Skeleton, Organs, Muscles, and Spacesuit.</li>
+              <li><strong>Spatial Hotspots:</strong> Interactive markers on Brain, Spine, Heart, and Eyes with smooth cinematic fly-to damping.</li>
+              <li><strong>Graceful Degradation:</strong> Seamless automatic 2D SVG fallback if running on low-power unaccelerated hardware.</li>
+            </ul>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title" style="color: var(--accent-blue);">⏱️ Predictive Health Runway™</div>
+            <ul class="panel-list">
+              <li><strong>Countdown, Not Alarm:</strong> Calculates exact days remaining before a vital breaches flight surgeon safety limits.</li>
+              <li><strong>NASA HRP Envelopes:</strong> Heart Rate: 50–90 bpm; SpO2: ≥96%; Core Temp: 36.1–37.2°C; SANS ONSD: &lt;5.0 mm.</li>
+              <li><strong>Compounding Hazards:</strong> Radiation flares and microgravity float act as real-time decay multipliers.</li>
+              <li><strong>Scheduled Maintenance:</strong> Converts emergency panics into calm, predictable countermeasure protocols.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
+          CORE ENGINE: ZERO-ALLOCATION 60 FPS WEBGL WITH DYNAMIC DRIFT PROJECTION
+        </div>
+      </section>
+
+      <!-- SLIDE 4 -->
+      <section class="slide" data-slide="4">
+        <div>
+          <div class="slide-tag">HARDWARE-GRADE TELEMETRY</div>
+          <h1 class="slide-title">Continuous Smart Shirt Ingestion & 60 FPS Oscilloscope</h1>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <div class="panel" style="padding: 14px 20px;">
+            <p style="font-size: 13.5px; color: var(--text-main); line-height: 1.5;">
+              <strong style="color: var(--accent-cyan);">CSA Bio-Monitor & Hexoskin Profile:</strong> HELIX ingests continuous BLE GATT health telemetry streaming directly from astronaut smart garments with zero human entry required.
+            </p>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div class="panel">
+            <div class="panel-title">📈 60 FPS Live ECG</div>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+              HTML5 Canvas oscilloscope rendering true P-QRS-T cardiac depolarization waveforms with phosphor decay trail physics.
+            </p>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">🏃 Motion Filter</div>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+              Adaptive digital filter isolates true cardiac signals from treadmill and ergometer movement distortion during workouts.
+            </p>
+          </div>
+
+          <div class="panel" style="border-color: rgba(61, 224, 197, 0.4);">
+            <div class="panel-title" style="color: var(--accent-cyan);">⚡ 1-Click Twin Ingestion</div>
+            <p style="font-size: 13px; color: var(--text-main); line-height: 1.5;">
+              Telemetry flows straight into the physiological state machine, updating 3D vascular systems and advancing daily Measure rings.
+            </p>
+          </div>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
+          LIVE METRICS: HR 72 BPM • RESP 14 BR/MIN • SKIN TEMP 34.2°C • 0.04G
+        </div>
+      </section>
+
+      <!-- SLIDE 5 -->
+      <section class="slide" data-slide="5">
+        <div>
+          <div class="slide-tag">AMBIENT BIOMARKERS</div>
+          <h1 class="slide-title">Web Audio Acoustic Stress & Computer Vision Ultrasound</h1>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-title" style="color: var(--accent-amber);">🎙️ 5s Voice Check-In (Web Audio API)</div>
+            <ul class="panel-list">
+              <li><strong>Zero Friction:</strong> Evaluates cabin microphone speech during morning check-in with zero astronaut effort.</li>
+              <li><strong>Pitch Jitter (ms):</strong> Quantifies vocal cord micro-tremors indicating acute neuro-vestibular stress.</li>
+              <li><strong>Harmonics-to-Noise (HNR):</strong> Detects sub-harmonic vocal hoarseness and vocal fold strain in dB.</li>
+              <li><strong>Cognitive Readiness Index:</strong> Synthesizes speech tempo and articulation into a 0–100% readiness score.</li>
+            </ul>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title" style="color: var(--accent-cyan);">🎯 AI Ultrasound & SANS Checker (CV)</div>
+            <ul class="panel-list">
+              <li><strong>The SANS Threat:</strong> Spaceflight-Associated Neuro-ocular Syndrome causes permanent vision loss.</li>
+              <li><strong>Acoustic Gel Coupling:</strong> Analyzes transducer dark borders to warn crew if probe lacks gel contact.</li>
+              <li><strong>Laplacian Edge Sharpness:</strong> Gradient variance check prevents blurry motion-distorted captures.</li>
+              <li><strong>96% Target Reticle Lock:</strong> Auto-locks calipers on Optic Nerve Sheath Diameter (ONSD at 5.2 mm).</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
+          PASSIVE SURVEILLANCE: CAPTURING HEALTH METRICS WITHOUT ASTRONAUT BURDEN
+        </div>
+      </section>
+
+      <!-- SLIDE 6 -->
+      <section class="slide" data-slide="6">
+        <div>
+          <div class="slide-tag">ACTIONABLE AUTONOMY & GROUND SYNC</div>
+          <h1 class="slide-title">The 'One Thing Today' Engine & Asynchronous Store/Sync</h1>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-title" style="color: var(--accent-blue);">🎯 The 'One Thing Today' Engine</div>
+            <ul class="panel-list">
+              <li><strong>Single-Action Focus:</strong> Aggregates 9 physiological subsystems into exactly ONE prioritized countermeasure per shift.</li>
+              <li><strong>Example Protocol:</strong> <em>"Conduct 45-min ARED Resistive Load Protocol to arrest lumbar spine demineralization."</em></li>
+              <li><strong>Equipment Down? Contingency:</strong> One click dynamically recalculates workout with resistance bands if gym machine fails.</li>
+              <li><strong>Calm Reminders:</strong> Non-intrusive shift reminders synchronize with cabin circadian lighting.</li>
+            </ul>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title" style="color: var(--accent-cyan);">📦 Store-and-Forward Ground Sync</div>
+            <ul class="panel-list">
+              <li><strong>SBAR Clinical Ground Packet:</strong> Formats data into Situation, Background, Assessment, Recommendation.</li>
+              <li><strong>Store-and-Forward Queue:</strong> Buffers telemetry in local storage during planetary occlusion or comms blackouts.</li>
+              <li><strong>Burst Telemetry Uplink:</strong> Transmits compressed delta packets to Houston the instant high-gain link opens.</li>
+              <li><strong>Role-Based Privacy:</strong> Biometrics encrypted with client-side AES-GCM; crew view shows buddy-checks only.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
+          REALITY: HARDWARE BREAKS & COMMS DROP • HELIX ADAPTS AUTONOMOUSLY
+        </div>
+      </section>
+
+      <!-- SLIDE 7 -->
+      <section class="slide" data-slide="7">
+        <div>
+          <div class="slide-tag">THE HORIZON</div>
+          <h1 class="slide-title">Engineering Stack, Terrestrial Impact & Roadmap</h1>
+        </div>
+
+        <div class="grid-3">
+          <div class="panel">
+            <div class="panel-title">🛠️ Engineering Stack</div>
+            <ul class="panel-list" style="gap: 8px;">
+              <li><strong>100% Offline-First:</strong> Runs locally with zero cloud dependencies.</li>
+              <li><strong>Frontend:</strong> React 19, TypeScript, Three.js, Web Audio API.</li>
+              <li><strong>Backend:</strong> FastAPI & Express with Google Identity + signed JWT.</li>
+              <li><strong>Dual Orbital Themes:</strong> Deep Space Dark & Orbital Day light mode.</li>
+            </ul>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title" style="color: var(--accent-cyan);">🌍 Terrestrial Impact</div>
+            <ul class="panel-list" style="gap: 8px;">
+              <li><strong>Antarctic Stations:</strong> Extreme isolation and identical comms lag.</li>
+              <li><strong>Submarines:</strong> Months submerged under radio silence.</li>
+              <li><strong>Rural Healthcare:</strong> Guiding non-physicians with AI ultrasound.</li>
+              <li><strong>Combat Medics:</strong> Autonomous triage in comms-blackout zones.</li>
+            </ul>
+          </div>
+
+          <div class="panel" style="border-color: rgba(244, 184, 96, 0.4);">
+            <div class="panel-title" style="color: var(--accent-amber);">🚀 6-Month Roadmap</div>
+            <ul class="panel-list" style="gap: 8px;">
+              <li><strong>Hardware Pairing:</strong> Butterfly iQ probe & Hexoskin smart shirt.</li>
+              <li><strong>Parabolic Flight:</strong> Validate 3D twin touch targets in zero-g.</li>
+              <li><strong>NASA ExMC:</strong> Submit to Exploration Medical Capability solicitation.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
+          HELIX: GUIDING CREWS SAFELY TO MARS — AND BRINGING THEM HOME
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Speaker Notes Drawer -->
+    <aside class="speaker-notes-drawer" id="notesDrawer">
+      <div class="notes-header">SPEAKER NOTES • PRESENTER VIEW</div>
+      <div class="notes-content" id="notesContent">
+        <!-- Injected via JavaScript -->
+      </div>
+    </aside>
+  </main>
+
+  <!-- Footer Status Bar -->
+  <footer>
+    <div class="slide-progress" id="slideProgress">SLIDE 1 OF 7</div>
+    <div class="key-hints">
+      <span>◀</span> <span>▶</span> Navigate &bull; 
+      <span>Space</span> Advance &bull; 
+      <span>P</span> Notes &bull; 
+      <span>F</span> Fullscreen
+    </div>
+    <div>HELIX ASTRONAUT COCKPIT &bull; MISSION CONTROL READY</div>
+  </footer>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const notesToggleBtn = document.getElementById('notesToggleBtn');
+    const notesDrawer = document.getElementById('notesDrawer');
+    const notesContent = document.getElementById('notesContent');
+    const slideProgress = document.getElementById('slideProgress');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+    let currentSlide = 0;
+
+    const speakerNotes = [
+      // Slide 1
+      `<p><strong>[Minute 1 Hook]</strong> Open with maximum conviction. Establish the life-or-death reality of deep space.</p>
+       <div class="notes-action">Action: Keep the 3D twin slowly rotating in Deep Space Dark mode.</div>
+       <p>"Imagine waking up halfway to Mars with blurred vision and high heart rate. You radio Houston. It takes 44 minutes for a single reply. Houston cannot save you in an emergency. HELIX is your autonomous body flight computer."</p>`,
+
+      // Slide 2
+      `<p><strong>[Minute 2: Human Factors]</strong> Contrast the silent human degradation with the failure of legacy hospital dashboards.</p>
+       <div class="notes-action">Action: Hover cursor over the 5 spaceflight hazard pills in the top bar.</div>
+       <p>"Human degradation in zero-g is silent—bone loss doesn't hurt until it's too late. But traditional dashboards drown crew in 50 charts, causing severe alarm fatigue. HELIX applies NASA Calm Cockpit principles to filter noise into spatial insight."</p>`,
+
+      // Slide 3
+      `<p><strong>[Minute 3: 3D Twin & Runway]</strong> Demonstrate spatial body cognition live.</p>
+       <div class="notes-action">Action: Orbit the 3D skeleton; point out the blue Earth wireframe ghost behind the bones.</div>
+       <p>"Instead of numbers, astronauts glance at their digital avatar. The solid bones show current drift; the blue wireframe is their pre-launch Earth baseline. On the left, the Predictive Runway gives days remaining—converting panics into scheduled maintenance."</p>`,
+
+      // Slide 4
+      `<p><strong>[Minute 4: Smart Shirt Telemetry]</strong> Demonstrate real hardware ingestion.</p>
+       <div class="notes-action">Action: Click 'Sensor Stream'. Show the 60 FPS live ECG trace and click 'Stream to Twin'.</div>
+       <p>"HELIX is hardware-ready. Here is a live 60 FPS ECG oscilloscope streaming smart-shirt telemetry. Notice the motion artifact filter for workouts. With one click, biometrics update the 3D twin and advance the Measure ring."</p>`,
+
+      // Slide 5
+      `<p><strong>[Minute 5: Ambient Diagnostics]</strong> Showcase effortless speech & ultrasound AI.</p>
+       <div class="notes-action">Action: Open 'Voice Check' (5s audio FFT scan), then click 'Measure' -> 'Load Demo SANS Scan'.</div>
+       <p>"Acoustic biomarkers extract cognitive fatigue from 5 seconds of voice using the Web Audio API. And our computer vision engine checks probe acoustic gel coupling and locks onto optic nerve calipers with a 96% target lock."</p>`,
+
+      // Slide 6
+      `<p><strong>[Minute 6: One Thing Today & Ground Sync]</strong> Show decision-making and comms lag handling.</p>
+       <div class="notes-action">Action: Point to 'One Thing Today', click 'Equipment Down? Use Backup', then open 'Summary' tab.</div>
+       <p>"HELIX collapses complex data into exactly ONE daily action. If the gym breaks, one click recalculates an alternative protocol. And for Earth comms, all telemetry is queued in an SBAR store-and-forward packet for orbital ground passes."</p>`,
+
+      // Slide 7
+      `<p><strong>[Minute 7: Vision & Closing]</strong> Conclude with engineering validation and terrestrial impact.</p>
+       <div class="notes-action">Action: Click Sun icon to flip to Orbital Day light mode. Conclude with final punchline.</div>
+       <p>"Offline-first, NASA-grounded, and battle-tested for deep space and remote Earth medicine. When humanity journeys to Mars, HELIX is the autonomous medical officer that will bring our crew home. Thank you!"</p>`
+    ];
+
+    function showSlide(index) {
+      if (index < 0) index = 0;
+      if (index >= slides.length) index = slides.length - 1;
+      currentSlide = index;
+
+      slides.forEach((s, i) => {
+        s.classList.toggle('active', i === currentSlide);
+      });
+
+      slideProgress.textContent = `SLIDE ${currentSlide + 1} OF ${slides.length}`;
+      notesContent.innerHTML = speakerNotes[currentSlide] || '<p>No speaker notes for this slide.</p>';
+
+      prevBtn.disabled = currentSlide === 0;
+      nextBtn.disabled = currentSlide === slides.length - 1;
+    }
+
+    prevBtn.addEventListener('click', () => showSlide(currentSlide - 1));
+    nextBtn.addEventListener('click', () => showSlide(currentSlide + 1));
+
+    notesToggleBtn.addEventListener('click', () => {
+      notesDrawer.classList.toggle('open');
+      notesToggleBtn.classList.toggle('active');
+    });
+
+    fullscreenBtn.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        showSlide(currentSlide + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        showSlide(currentSlide - 1);
+      } else if (e.key.toLowerCase() === 'p') {
+        notesDrawer.classList.toggle('open');
+        notesToggleBtn.classList.toggle('active');
+      } else if (e.key.toLowerCase() === 'f') {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    });
+
+    // Initialize
+    showSlide(0);
+  </script>
+</body>
+</html>
