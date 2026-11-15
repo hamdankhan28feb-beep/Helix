@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -134,7 +134,7 @@ def health() -> dict[str, str]: return {"status": "ok", "mode": "synthetic-demo"
 @app.get("/indicators")
 def indicators() -> list[dict[str, Any]]:
     data = json.loads((BASE / "indicators.json").read_text(encoding="utf-8"))
-    return [{**x, "five_questions": {"what_in_space": f"Can {x['name'].lower()} be measured in space? Yes, with the approved device or self-report described below.", "why": x["why_needed"], "hazards": x["hazard_effects"], "when_attention": x["attention"], "prevention": x["prevention"]}, "how_to_measure": x["how_to_measure"], "status_thresholds": "Not configured; follow mission medical standards."} for x in data]
+    return [{**x, "five_questions": {"what_in_space": f"Can {x['name'].lower()} be measured in space? Yes, with the approved device or self-report described below.", "why": x["why_needed"], "hazards": x["hazard_effects"], "when_attention": x["attention"], "prevention": x["prevention"]}, "how_to_measure": x["how_to_measure"], "status_thresholds": "No clinical threshold configured; follow mission medical standards."} for x in data]
 
 @app.post("/auth/login")
 def login(body: Login, request: Request) -> dict[str, Any]:
@@ -154,7 +154,7 @@ def save_measurement(body: Measurement, crew_id: str = Depends(current_user)) ->
     recorded = (body.recorded_at or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
     with connect() as con:
         con.execute("INSERT INTO measurements(crew_id,indicator_id,value,unit,recorded_at) VALUES(?,?,?,?,?)", (crew_id, body.indicator_id, body.value, body.unit, recorded))
-    return {"saved": True, "sync_notice": "This measurement was sent to the demo Earth-sync service.", "recorded_at": recorded}
+    return {"saved": True, "sync_notice": "Stored locally in the demo sync service; not transmitted to Earth.", "recorded_at": recorded}
 
 PROFILES = {"commander": {"name":"Commander Demo", "environment":"transit", "gravity_g":0.0, "baseline":{"heart_rate":64,"blood_pressure_systolic":112,"sleep_hours":7.6,"mood_stress":2,"exercise_minutes":50}}, "pilot": {"name":"Pilot Demo", "environment":"station", "gravity_g":0.0, "baseline":{"heart_rate":70,"blood_pressure_systolic":118,"sleep_hours":7.2,"mood_stress":2,"exercise_minutes":45}}, "scientist": {"name":"Scientist Demo", "environment":"lunar_base", "gravity_g":0.16, "baseline":{"heart_rate":68,"blood_pressure_systolic":115,"sleep_hours":7.8,"mood_stress":1,"exercise_minutes":55}}, "engineer": {"name":"Engineer Demo", "environment":"mars_rover", "gravity_g":0.38, "baseline":{"heart_rate":72,"blood_pressure_systolic":120,"sleep_hours":7.1,"mood_stress":3,"exercise_minutes":40}}}
 STRESSORS = {"sleep_debt": {"sleep_hours":-2.0,"mood_stress":1}, "missed_exercise":{"exercise_minutes":-25}, "isolation_stress":{"mood_stress":2,"sleep_hours":-0.5}, "bp_creep":{"blood_pressure_systolic":12}, "co2_rise":{"heart_rate":6,"sleep_hours":-0.4}, "radiation_event":{"radiation_relative":12}, "eva_strain":{"heart_rate":8,"exercise_minutes":-10}}
@@ -172,7 +172,7 @@ def make_stream(profile_id: str, day: int = 63, stressors: list[str] | None = No
     return {"profile": {"id": profile_id, **profile}, "day": day, "synthetic": True, "stressors": active, "measurements": rows}
 
 @app.get("/stream/{profile_id}")
-def stream(profile_id: str, day: int = 63, stressor: list[str] | None = None) -> dict[str, Any]:
+def stream(profile_id: str, day: int = 63, stressor: list[str] = Query(default=[])) -> dict[str, Any]:
     if day < 1 or day > 1000: raise HTTPException(422, "day must be between 1 and 1000")
     return make_stream(profile_id, day, stressor)
 
@@ -189,10 +189,33 @@ def assessment(profile_id: str, day: int = 63, stressors: list[str] | None = Non
     if latest["exercise_minutes"] < base["exercise_minutes"] - 10: actions.append({"action":"Resume the planned exercise session if fit and cleared", "tag":"Recommended", "reason":"Activity is below the synthetic baseline; exercise supports fitness in reduced gravity."})
     if latest["blood_pressure_systolic"] > base["blood_pressure_systolic"] + 8: actions.append({"action":"Repeat the measurement per mission protocol and review the trend", "tag":"Recommended", "reason":"The synthetic trend is above this demo baseline; use mission guidance."})
     actions = actions or [{"action":"Keep today's planned routine and check in again", "tag":"Recommended", "reason":"No notable change from the synthetic baseline is projected."}]
+    # One Thing Today must always carry backups: with a single stressor (e.g.
+    # radiation only) no condition above fires and backups came back empty.
+    if len(actions) < 3:
+        extras: list[dict[str, str]] = []
+        if "radiation_event" in sample["stressors"]:
+            extras.append({"action":"Sync your personal dosimeter badge at the sleep-bay dock", "tag":"Recommended", "reason":"Confirms overnight shielding effectiveness using the mission dosimeter."})
+            extras.append({"action":"Move to shielded sleeping quarters during the flare", "tag":"Recommended", "reason":"Shielded quarters keep dose low during a solar particle event."})
+        extras += [
+            {"action":"Log your next measurement on schedule", "tag":"Recommended", "reason":"Regular self-checks keep small drifts easy to spot."},
+            {"action":"Check in with a crewmate", "tag":"Recommended", "reason":"Crew check-ins support wellbeing, especially when Earth support is delayed."},
+        ]
+        actions += extras[: 3 - len(actions)]
+    # Radiation region: the stream carries radiation_relative, but the
+    # assessment previously had no radiation region at all, so a solar
+    # flare (radiation_event stressor) changed nothing in the assessment.
+    # Expected value is the unstressed trend at this day (same formula as
+    # make_stream); drift is the excess over that trend.
+    expected_rad = round(0.4 + day * 0.013, 2)
+    actual_rad = latest["radiation_relative"]
+    rad_drift = min(100, round(abs(actual_rad - expected_rad) / max(expected_rad, 0.01) * 100))
+    rad_status = "Caution" if rad_drift >= 50 else ("Watch" if rad_drift >= 15 else "Nominal")
+    rad_runway_days = max(1, round((100 - rad_drift) / max(1, rad_drift / 5))) if rad_drift else None
+    regions["radiation"] = {"drift_percent": rad_drift, "status": rad_status, "runway": f"~{rad_runway_days} days" if rad_runway_days else "Stable", "confidence": "Low", "explanation": "Simple projection from synthetic trends; not a medical forecast."}
     return {"synthetic":True,"disclaimer":"Synthetic data and demo status bands only; not clinical thresholds or advice. Runway is a simple trend projection. Follow mission medical standards.","profile":profile,"day":day,"stressors":sample["stressors"],"environment":{"name":profile["environment"],"gravity_g":profile["gravity_g"]},"combined_status":"Watch" if any(x["status"]!="Nominal" for x in regions.values()) else "Nominal","hazard_status":{"space_radiation":"Monitor relative trend; official limits come from NASA standards.","isolation_confinement":"Compounding context: mood and sleep stressors enabled.","distance_from_earth":"Use crew protocol; support may be delayed.","gravity_fields":f"Environment gravity: {profile['gravity_g']} g.","hostile_closed_environments":"Cabin conditions are synthetic context only."},"regions":regions,"one_thing_today":{"primary":actions[0],"backups":actions[1:3]},"latest":latest}
 
 @app.get("/assessment/{profile_id}")
-def get_assessment(profile_id: str, day: int = 63, stressor: list[str] | None = None) -> dict[str, Any]:
+def get_assessment(profile_id: str, day: int = 63, stressor: list[str] = Query(default=[])) -> dict[str, Any]:
     return assessment(profile_id, day, stressor)
 
 @app.get("/packet/{profile_id}")
