@@ -142,7 +142,7 @@ export const TwinViewport: React.FC<TwinViewportProps> = ({
     <section
       aria-label="3D Ghost Twin Viewport"
       className={cn(
-        'relative flex flex-col justify-between rounded-3xl cockpit-panel overflow-hidden min-h-[440px] lg:min-h-[560px]',
+        'relative flex flex-col justify-between rounded-3xl cockpit-panel overflow-hidden min-h-[500px] lg:min-h-[620px] h-full',
         (highlightedCoachStep === 0 || highlightedCoachStep === 1) &&
           'ring-2 ring-[#7FB2FF]'
       )}
@@ -185,7 +185,7 @@ export const TwinViewport: React.FC<TwinViewportProps> = ({
       )}
 
       {/* Main 3D / 2D Canvas Stage */}
-      <div className="relative flex-1 min-h-[320px] lg:min-h-[410px]">
+      <div className="relative w-full flex-1 min-h-[420px] lg:min-h-[540px] h-[460px] lg:h-[580px]">
         {use2DFallback ? (
           fallbackNode
         ) : tabHidden ? (
